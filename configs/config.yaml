@@ -1,0 +1,25 @@
+server:
+  port: 8081
+  cors_origins:
+    - "http://localhost:5173"
+
+database:
+  path: "./data/market-lens.db"
+
+finnhub:
+  api_key: "${FINNHUB_API_KEY}"
+  websocket_url: "wss://ws.finnhub.io"
+  base_url: "https://finnhub.io/api/v1"
+
+ai:
+  provider: "openai"
+  model: "gpt-4"
+  api_key: "${OPENAI_API_KEY}"
+  max_tokens: 500
+  temperature: 0.3
+
+trading:
+  initial_cash: "100000.00"
+  commission_rate: "0.001"
+  slippage_rate: "0.001"
+  currency: "USD"
