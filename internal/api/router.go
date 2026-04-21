@@ -6,7 +6,7 @@ import (
 	"github.com/flametest/market-lens/internal/data"
 )
 
-func NewRouter(corsOrigins []string, mgr *data.Manager) http.Handler {
+func NewRouter(corsOrigins []string, mgr *data.Manager, repo *data.Repository) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/v1/system/health", handleHealth)
@@ -14,6 +14,11 @@ func NewRouter(corsOrigins []string, mgr *data.Manager) http.Handler {
 	if mgr != nil {
 		market := NewMarketHandler(mgr)
 		market.RegisterRoutes(mux)
+	}
+
+	if repo != nil {
+		signals := NewSignalHandler(repo)
+		signals.RegisterRoutes(mux)
 	}
 
 	var handler http.Handler = mux

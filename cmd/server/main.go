@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flametest/market-lens/internal/analysis"
 	"github.com/flametest/market-lens/internal/api"
 	"github.com/flametest/market-lens/internal/config"
 	"github.com/flametest/market-lens/internal/data"
@@ -54,16 +55,19 @@ func main() {
 	bus := eventbus.NewInMemoryBus(logger)
 	defer bus.Close()
 
+	repo := data.NewRepository(db)
+
 	provider := finnhub.NewProvider(
 		cfg.Finnhub.WebSocketURL,
 		cfg.Finnhub.BaseURL,
 		cfg.Finnhub.APIKey,
 		logger,
 	)
-
 	mgr := data.NewManager(provider, db, bus, logger)
 
-	router := api.NewRouter(cfg.Server.CORSOrigins, mgr)
+	analysisEngine := analysis.NewEngine(repo, bus, logger)
+
+	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
@@ -89,6 +93,12 @@ func main() {
 			}
 		}()
 	}
+
+	go func() {
+		if err := analysisEngine.Start(context.Background()); err != nil {
+			logger.Error("failed to start analysis engine", slog.String("error", err.Error()))
+		}
+	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
