@@ -15,6 +15,7 @@ export default function Backtest() {
   const [backtests, setBacktests] = useState<BacktestRun[]>(mockBacktests)
   const [selectedBt, setSelectedBt] = useState<BacktestRun>(mockBacktests[0])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [equity, setEquity] = useState(equityCurveData)
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function Backtest() {
 
   const handleRun = async () => {
     setLoading(true)
+    setError('')
     try {
       const result = await runBacktest({
         symbol: 'AAPL', strategy: { name: 'ma_crossover' },
@@ -37,7 +39,9 @@ export default function Backtest() {
       })
       setBacktests(prev => [result, ...prev])
       setSelectedBt(result)
-    } catch { /* fallback to mock */ }
+    } catch (err: any) {
+      setError(err?.message || 'Backtest failed. Ensure market data is available.')
+    }
     setLoading(false)
   }
 
@@ -100,6 +104,12 @@ export default function Backtest() {
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="px-4 py-3 rounded-lg bg-[var(--color-loss)]/10 border border-[var(--color-loss)]/20 text-sm text-[var(--color-loss)]">
+          {error}
+        </div>
+      )}
 
       {selectedBt && (
         <div className="animate-slide-up">

@@ -1,29 +1,53 @@
-import { useEffect, useState } from 'react'
-import { Star, Search, ArrowUpDown } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Star, Search, ArrowUpDown, RefreshCw } from 'lucide-react'
 import { mockWatchlist } from '../mock/data'
-import { fetchSymbols } from '../api'
+import { fetchSymbols, fetchQuote } from '../api'
 import type { Tick } from '../types'
 
 type SortKey = keyof Tick
 type SortDir = 'asc' | 'desc'
+
+const symbolNames: Record<string, string> = {
+  AAPL: 'Apple Inc.', GOOGL: 'Alphabet Inc.', MSFT: 'Microsoft Corp.',
+  AMZN: 'Amazon.com Inc.', NVDA: 'NVIDIA Corp.', META: 'Meta Platforms',
+  TSLA: 'Tesla Inc.', JPM: 'JPMorgan Chase',
+}
 
 export default function MarketOverview() {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('symbol')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [watchlist, setWatchlist] = useState<Tick[]>(mockWatchlist)
+  const [loading, setLoading] = useState(true)
+
+  const loadData = useCallback(async (q?: string) => {
+    setLoading(true)
+    try {
+      const raw: any[] = await fetchSymbols(q || undefined)
+      if (!raw || raw.length === 0) { setLoading(false); return }
+
+      const ticks = await Promise.all(
+        raw.map(async (s: any) => {
+          const tick = await fetchQuote(s.code)
+          if (tick && tick.price > 0) return tick
+          return {
+            symbol: s.code, price: 0, volume: 0, change: 0, changePercent: 0,
+            high: 0, low: 0, open: 0, timestamp: Date.now(),
+          }
+        })
+      )
+      const valid = ticks.filter(t => t.price > 0)
+      if (valid.length > 0) setWatchlist(valid)
+    } catch { /* keep mock */ }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { loadData() }, [loadData])
 
   useEffect(() => {
-    fetchSymbols(search || undefined).then((raw: any[]) => {
-      if (raw && raw.length > 0) {
-        setWatchlist(raw.map((s: any) => ({
-          symbol: s.code,
-          price: 0, volume: 0, change: 0, changePercent: 0,
-          high: 0, low: 0, open: 0, timestamp: Date.now(),
-        })))
-      }
-    }).catch(() => {})
-  }, [search])
+    const timer = setTimeout(() => loadData(search), 500)
+    return () => clearTimeout(timer)
+  }, [search, loadData])
 
   const filtered = watchlist.filter(t =>
     t.symbol.toLowerCase().includes(search.toLowerCase())
@@ -72,6 +96,9 @@ export default function MarketOverview() {
               className="input-field pl-9 w-56 text-xs"
             />
           </div>
+          <button onClick={() => loadData(search)} className="btn-ghost flex items-center gap-1.5" disabled={loading}>
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+          </button>
         </div>
       </div>
 
@@ -97,6 +124,7 @@ export default function MarketOverview() {
                 <td>
                   <div className="flex items-center gap-2">
                     <span className="font-data text-sm font-semibold text-[var(--color-text-primary)]">{t.symbol}</span>
+                    <span className="text-xs text-[var(--color-text-muted)]">{symbolNames[t.symbol] || ''}</span>
                   </div>
                 </td>
                 <td className="font-data text-sm font-medium text-[var(--color-text-primary)]">

@@ -13,18 +13,9 @@ export default function Dashboard() {
   const account = mockAccount
 
   useEffect(() => {
-    fetchSignals().then(setSignals).catch(() => {})
-    fetchStrategies().then(setStrategies).catch(() => {})
-    fetchSentiments().then(setSentiments).catch(() => {})
-    fetchSymbols().then((raw: any[]) => {
-      if (raw && raw.length > 0) {
-        setWatchlist(raw.map((s: any) => ({
-          symbol: s.code,
-          price: 0, volume: 0, change: 0, changePercent: 0,
-          high: 0, low: 0, open: 0, timestamp: Date.now(),
-        })))
-      }
-    }).catch(() => {})
+    fetchSignals().then(data => { if (data && data.length > 0) setSignals(data) }).catch(() => {})
+    fetchStrategies().then(data => { if (data && data.length > 0) setStrategies(data) }).catch(() => {})
+    fetchSentiments().then(data => { if (data && data.length > 0) setSentiments(data) }).catch(() => {})
   }, [])
 
   const topGainers = [...watchlist].sort((a, b) => b.changePercent - a.changePercent).slice(0, 3)
