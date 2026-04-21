@@ -1,11 +1,22 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Star, Search, ArrowUpDown, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Star, Search, ArrowUpDown, RefreshCw, Clock } from 'lucide-react'
 import { mockWatchlist } from '../mock/data'
 import { fetchSymbols, fetchQuote } from '../api'
 import type { Tick } from '../types'
 
 type SortKey = keyof Tick
 type SortDir = 'asc' | 'desc'
+
+const REFRESH_OPTIONS = [
+  { label: 'Off', ms: 0 },
+  { label: '1s', ms: 1000 },
+  { label: '5s', ms: 5000 },
+  { label: '10s', ms: 10000 },
+  { label: '1m', ms: 60000 },
+  { label: '5m', ms: 300000 },
+  { label: '30m', ms: 1800000 },
+  { label: '1h', ms: 3600000 },
+] as const
 
 const symbolNames: Record<string, string> = {
   AAPL: 'Apple Inc.', GOOGL: 'Alphabet Inc.', MSFT: 'Microsoft Corp.',
@@ -19,6 +30,9 @@ export default function MarketOverview() {
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [watchlist, setWatchlist] = useState<Tick[]>(mockWatchlist)
   const [loading, setLoading] = useState(true)
+  const [refreshMs, setRefreshMs] = useState(10000)
+  const [showRefreshMenu, setShowRefreshMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(async (q?: string) => {
     setLoading(true)
@@ -48,6 +62,25 @@ export default function MarketOverview() {
     const timer = setTimeout(() => loadData(search), 500)
     return () => clearTimeout(timer)
   }, [search, loadData])
+
+  useEffect(() => {
+    if (refreshMs === 0) return
+    const id = setInterval(() => loadData(search), refreshMs)
+    return () => clearInterval(id)
+  }, [refreshMs, loadData, search])
+
+  useEffect(() => {
+    if (!showRefreshMenu) return
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowRefreshMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [showRefreshMenu])
+
+  const activeRefreshLabel = REFRESH_OPTIONS.find(o => o.ms === refreshMs)?.label || 'Off'
 
   const filtered = watchlist.filter(t =>
     t.symbol.toLowerCase().includes(search.toLowerCase())
@@ -96,8 +129,33 @@ export default function MarketOverview() {
               className="input-field pl-9 w-56 text-xs"
             />
           </div>
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowRefreshMenu(v => !v)}
+              className={`btn-ghost flex items-center gap-1.5 ${refreshMs > 0 ? 'text-[var(--color-accent)]' : ''}`}
+            >
+              <Clock size={12} />
+              <span className="text-xs">{refreshMs > 0 ? `Auto ${activeRefreshLabel}` : 'Auto Refresh'}</span>
+              {refreshMs > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse-soft" />}
+            </button>
+            {showRefreshMenu && (
+              <div className="absolute right-0 top-full mt-1 card-elevated py-1 min-w-[100px] z-50">
+                {REFRESH_OPTIONS.map(opt => (
+                  <button
+                    key={opt.label}
+                    onClick={() => { setRefreshMs(opt.ms); setShowRefreshMenu(false) }}
+                    className={`w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--color-bg-hover)] transition-colors border-none bg-transparent cursor-pointer ${
+                      refreshMs === opt.ms ? 'text-[var(--color-accent)] font-semibold' : 'text-[var(--color-text-secondary)]'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={() => loadData(search)} className="btn-ghost flex items-center gap-1.5" disabled={loading}>
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
