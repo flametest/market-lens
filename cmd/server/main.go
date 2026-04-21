@@ -19,6 +19,7 @@ import (
 	"github.com/flametest/market-lens/internal/data"
 	"github.com/flametest/market-lens/internal/data/finnhub"
 	"github.com/flametest/market-lens/internal/eventbus"
+	"github.com/flametest/market-lens/internal/execution"
 	"github.com/flametest/market-lens/internal/strategy"
 	"github.com/flametest/market-lens/internal/strategy/risk"
 )
@@ -73,8 +74,9 @@ func main() {
 	strategyEngine := strategy.NewEngine(repo, bus, logger)
 	riskManager := risk.NewManager(repo, bus, logger)
 	backtestEngine := backtest.NewEngine(repo)
+	execEngine := execution.NewEngine(repo, bus, logger)
 
-	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo, strategyEngine, backtestEngine)
+	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo, strategyEngine, backtestEngine, execEngine)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
@@ -114,6 +116,12 @@ func main() {
 	}()
 
 	_ = riskManager
+
+	go func() {
+		if err := execEngine.Start(context.Background()); err != nil {
+			logger.Error("failed to start execution engine", slog.String("error", err.Error()))
+		}
+	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

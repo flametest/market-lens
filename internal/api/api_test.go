@@ -9,7 +9,7 @@ import (
 )
 
 func TestHealthEndpoint(t *testing.T) {
-	router := NewRouter([]string{"http://localhost:5173"}, nil, nil, nil, nil)
+	router := NewRouter([]string{"http://localhost:5173"}, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/health", nil)
 	w := httptest.NewRecorder()
@@ -21,7 +21,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestCORSMiddleware(t *testing.T) {
-	router := NewRouter([]string{"http://localhost:5173"}, nil, nil, nil, nil)
+	router := NewRouter([]string{"http://localhost:5173"}, nil, nil, nil, nil, nil)
 
 	t.Run("allowed origin", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodOptions, "/api/v1/system/health", nil)
