@@ -3,11 +3,12 @@ package api
 import (
 	"net/http"
 
+	"github.com/flametest/market-lens/internal/backtest"
 	"github.com/flametest/market-lens/internal/data"
 	"github.com/flametest/market-lens/internal/strategy"
 )
 
-func NewRouter(corsOrigins []string, mgr *data.Manager, repo *data.Repository, strategyEngine *strategy.Engine) http.Handler {
+func NewRouter(corsOrigins []string, mgr *data.Manager, repo *data.Repository, strategyEngine *strategy.Engine, backtestEngine *backtest.Engine) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/v1/system/health", handleHealth)
@@ -25,6 +26,11 @@ func NewRouter(corsOrigins []string, mgr *data.Manager, repo *data.Repository, s
 	if strategyEngine != nil {
 		strategies := NewStrategyHandler(strategyEngine, repo)
 		strategies.RegisterRoutes(mux)
+	}
+
+	if backtestEngine != nil {
+		bt := NewBacktestHandler(backtestEngine, repo)
+		bt.RegisterRoutes(mux)
 	}
 
 	var handler http.Handler = mux

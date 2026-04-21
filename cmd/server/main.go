@@ -14,6 +14,7 @@ import (
 
 	"github.com/flametest/market-lens/internal/analysis"
 	"github.com/flametest/market-lens/internal/api"
+	"github.com/flametest/market-lens/internal/backtest"
 	"github.com/flametest/market-lens/internal/config"
 	"github.com/flametest/market-lens/internal/data"
 	"github.com/flametest/market-lens/internal/data/finnhub"
@@ -71,8 +72,9 @@ func main() {
 
 	strategyEngine := strategy.NewEngine(repo, bus, logger)
 	riskManager := risk.NewManager(repo, bus, logger)
+	backtestEngine := backtest.NewEngine(repo)
 
-	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo, strategyEngine)
+	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo, strategyEngine, backtestEngine)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
