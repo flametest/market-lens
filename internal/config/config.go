@@ -28,9 +28,10 @@ type DatabaseConfig struct {
 }
 
 type DataProviderConfig struct {
-	Name    string `yaml:"name"`
-	APIKey  string `yaml:"api_key"`
-	BaseURL string `yaml:"base_url"`
+	Name       string `yaml:"name"`
+	APIKey     string `yaml:"api_key"`
+	BaseURL    string `yaml:"base_url"`
+	WebSocketURL string `yaml:"websocket_url"`
 }
 
 type FinnhubConfig struct {
@@ -90,6 +91,9 @@ func (c *Config) validate() error {
 	}
 	if c.DataProvider.BaseURL == "" {
 		c.DataProvider.BaseURL = "https://api.twelvedata.com"
+	}
+	if c.DataProvider.WebSocketURL == "" {
+		c.DataProvider.WebSocketURL = "wss://ws.twelvedata.com/v1/quotes/price"
 	}
 	if c.Database.Path == "" {
 		c.Database.Path = "./data/market-lens.db"

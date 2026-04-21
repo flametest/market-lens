@@ -79,6 +79,7 @@ func main() {
 	default:
 		provider = twelvedata.NewProvider(
 			cfg.DataProvider.BaseURL,
+			cfg.DataProvider.WebSocketURL,
 			cfg.DataProvider.APIKey,
 			logger,
 		)

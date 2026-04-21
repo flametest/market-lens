@@ -11,6 +11,7 @@ data_provider:
   name: "twelvedata"
   api_key: "${TWELVEDATA_API_KEY}"
   base_url: "https://api.twelvedata.com"
+  websocket_url: "wss://ws.twelvedata.com/v1/quotes/price"
 
 finnhub:
   api_key: "${FINNHUB_API_KEY}"
