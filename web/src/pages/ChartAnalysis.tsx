@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { createChart, type IChartApi, ColorType, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { createChart, type IChartApi, type ISeriesApi, type SeriesType, ColorType, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts'
 import { mockCandles, mockWatchlist } from '../mock/data'
 import { fetchCandles, fetchQuote } from '../api'
 import type { Interval, Candle, Tick } from '../types'
@@ -12,6 +12,7 @@ type UTCTimestamp = import('lightweight-charts').UTCTimestamp
 export default function ChartAnalysis() {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
+  const seriesRef = useRef<ISeriesApi<SeriesType>[]>([])
   const [activeSymbol] = useState('AAPL')
   const [activeInterval, setActiveInterval] = useState<Interval>('1d')
   const [activeIndicators, setActiveIndicators] = useState<string[]>(['MA(5)', 'MA(20)'])
@@ -36,13 +37,12 @@ export default function ChartAnalysis() {
     }).catch(() => {})
   }, [activeSymbol])
 
+  // Create chart once (only depends on container)
   useEffect(() => {
-    if (!chartContainerRef.current || candles.length === 0) return
+    const container = chartContainerRef.current
+    if (!container) return
 
-    const showRSI = activeIndicators.includes('RSI')
-    const showMACD = activeIndicators.includes('MACD')
-
-    const chart = createChart(chartContainerRef.current, {
+    const chart = createChart(container, {
       layout: {
         background: { type: ColorType.Solid, color: '#0f1219' },
         textColor: '#7a8299',
@@ -66,6 +66,45 @@ export default function ChartAnalysis() {
       timeScale: { borderColor: '#1e2433', timeVisible: true },
     })
 
+    chartRef.current = chart
+    seriesRef.current = []
+
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth })
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    handleResize()
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      chart.remove()
+      chartRef.current = null
+      seriesRef.current = []
+    }
+  }, [])
+
+  // Update series when candles or indicators change
+  const rebuildSeries = useCallback(() => {
+    const chart = chartRef.current
+    if (!chart || candles.length === 0) return
+
+    // Remove all existing series
+    for (const s of seriesRef.current) {
+      try { chart.removeSeries(s) } catch {}
+    }
+    seriesRef.current = []
+
+    // Remove extra panes (keep only pane 0)
+    const panes = chart.panes()
+    for (let i = panes.length - 1; i > 0; i--) {
+      try { panes[i].remove() } catch {}
+    }
+
+    const showRSI = activeIndicators.includes('RSI')
+    const showMACD = activeIndicators.includes('MACD')
+
     // Pane 0: Main candlestick chart
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#10b981',
@@ -79,26 +118,30 @@ export default function ChartAnalysis() {
       time: c.time as number as UTCTimestamp,
       open: c.open, high: c.high, low: c.low, close: c.close,
     })))
+    seriesRef.current.push(candleSeries)
 
     if (activeIndicators.includes('MA(5)')) {
-      const ma5 = chart.addSeries(LineSeries, {
+      const s = chart.addSeries(LineSeries, {
         color: '#6366f1', lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
       })
-      ma5.setData(computeMA(candles, 5))
+      s.setData(computeMA(candles, 5))
+      seriesRef.current.push(s)
     }
 
     if (activeIndicators.includes('MA(20)')) {
-      const ma20 = chart.addSeries(LineSeries, {
+      const s = chart.addSeries(LineSeries, {
         color: '#f59e0b', lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
       })
-      ma20.setData(computeMA(candles, 20))
+      s.setData(computeMA(candles, 20))
+      seriesRef.current.push(s)
     }
 
     if (activeIndicators.includes('EMA(12)')) {
-      const ema12 = chart.addSeries(LineSeries, {
+      const s = chart.addSeries(LineSeries, {
         color: '#ec4899', lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
       })
-      ema12.setData(computeEMA(candles, 12))
+      s.setData(computeEMA(candles, 12))
+      seriesRef.current.push(s)
     }
 
     if (activeIndicators.includes('Bollinger')) {
@@ -125,6 +168,7 @@ export default function ChartAnalysis() {
       upperLine.setData(upperData)
       lowerLine.setData(lowerData)
       middleLine.setData(middleData)
+      seriesRef.current.push(upperLine, lowerLine, middleLine)
     }
 
     // Pane 1: RSI
@@ -138,23 +182,22 @@ export default function ChartAnalysis() {
         color: '#a78bfa', lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
       }, 1)
       rsiLine.setData(rsiValid)
+      seriesRef.current.push(rsiLine)
 
-      // Reference lines at 70/30
-      const rsiRefData = candles.map(c => ({ time: c.time as number as UTCTimestamp, value: 70 as number }))
       const ob = chart.addSeries(LineSeries, {
         color: '#ef444480', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
       }, 1)
-      ob.setData(rsiRefData)
+      ob.setData(candles.map(c => ({ time: c.time as number as UTCTimestamp, value: 70 })))
+      seriesRef.current.push(ob)
 
-      const osData = candles.map(c => ({ time: c.time as number as UTCTimestamp, value: 30 }))
       const os = chart.addSeries(LineSeries, {
         color: '#10b98180', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
       }, 1)
-      os.setData(osData)
+      os.setData(candles.map(c => ({ time: c.time as number as UTCTimestamp, value: 30 })))
+      seriesRef.current.push(os)
 
-      // Set RSI pane height
-      const panes = chart.panes()
-      if (panes.length > 1) panes[1].setHeight(140)
+      const ps = chart.panes()
+      if (ps.length > 1) ps[1].setHeight(140)
     }
 
     // Pane 2: MACD
@@ -183,39 +226,30 @@ export default function ChartAnalysis() {
         color: '#6366f1', lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
       }, macdPaneIndex)
       macdLine.setData(macdSeriesData)
+      seriesRef.current.push(macdLine)
 
       const signalLine = chart.addSeries(LineSeries, {
         color: '#f59e0b', lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
       }, macdPaneIndex)
       signalLine.setData(signalSeriesData)
+      seriesRef.current.push(signalLine)
 
       const histogram = chart.addSeries(HistogramSeries, {
         priceLineVisible: false, lastValueVisible: false,
       }, macdPaneIndex)
       histogram.setData(histSeriesData)
+      seriesRef.current.push(histogram)
 
-      // Set MACD pane height
-      const panes = chart.panes()
-      if (panes.length > macdPaneIndex) panes[macdPaneIndex].setHeight(140)
+      const ps = chart.panes()
+      if (ps.length > macdPaneIndex) ps[macdPaneIndex].setHeight(140)
     }
 
     chart.timeScale().fitContent()
-    chartRef.current = chart
+  }, [candles, activeIndicators])
 
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth })
-      }
-    }
-    window.addEventListener('resize', handleResize)
-    handleResize()
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      chart.remove()
-      chartRef.current = null
-    }
-  }, [activeInterval, activeIndicators, candles])
+  useEffect(() => {
+    rebuildSeries()
+  }, [rebuildSeries])
 
   const toggleIndicator = (ind: string) => {
     setActiveIndicators(prev =>
