@@ -10,11 +10,12 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Finnhub  FinnhubConfig  `yaml:"finnhub"`
-	AI       AIConfig       `yaml:"ai"`
-	Trading  TradingConfig  `yaml:"trading"`
+	Server      ServerConfig      `yaml:"server"`
+	Database    DatabaseConfig    `yaml:"database"`
+	DataProvider DataProviderConfig `yaml:"data_provider"`
+	Finnhub     FinnhubConfig     `yaml:"finnhub"`
+	AI          AIConfig          `yaml:"ai"`
+	Trading     TradingConfig     `yaml:"trading"`
 }
 
 type ServerConfig struct {
@@ -24,6 +25,12 @@ type ServerConfig struct {
 
 type DatabaseConfig struct {
 	Path string `yaml:"path"`
+}
+
+type DataProviderConfig struct {
+	Name    string `yaml:"name"`
+	APIKey  string `yaml:"api_key"`
+	BaseURL string `yaml:"base_url"`
 }
 
 type FinnhubConfig struct {
@@ -77,6 +84,12 @@ func Load(path string) (*Config, error) {
 func (c *Config) validate() error {
 	if c.Server.Port <= 0 {
 		c.Server.Port = 8081
+	}
+	if c.DataProvider.Name == "" {
+		c.DataProvider.Name = "twelvedata"
+	}
+	if c.DataProvider.BaseURL == "" {
+		c.DataProvider.BaseURL = "https://api.twelvedata.com"
 	}
 	if c.Database.Path == "" {
 		c.Database.Path = "./data/market-lens.db"

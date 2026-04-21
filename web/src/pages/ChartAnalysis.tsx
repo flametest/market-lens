@@ -20,8 +20,14 @@ export default function ChartAnalysis() {
 
   useEffect(() => {
     fetchCandles(activeSymbol, activeInterval).then(data => {
-      if (data && data.length > 0) setCandles(data)
-    }).catch(() => {})
+      if (data && data.length > 0) {
+        setCandles(data)
+      } else {
+        setCandles(generateMockCandles(activeInterval))
+      }
+    }).catch(() => {
+      setCandles(generateMockCandles(activeInterval))
+    })
   }, [activeSymbol, activeInterval])
 
   useEffect(() => {
@@ -409,6 +415,39 @@ function computeEMAValues(values: (number | null)[], period: number): (number | 
     if (values[i] === null || ema === null) continue
     ema = values[i]! * k + ema * (1 - k)
     result[i] = ema
+  }
+  return result
+}
+
+const intervalStepMs: Record<string, number> = {
+  '1m': 60_000, '5m': 300_000, '15m': 900_000, '30m': 1_800_000,
+  '1h': 3_600_000, '4h': 14_400_000, '1d': 86_400_000, '1w': 604_800_000, '1M': 2_592_000_000,
+}
+
+function generateMockCandles(interval: string): Candle[] {
+  const step = intervalStepMs[interval] || 86_400_000
+  const count = 120
+  const now = Date.now()
+  const result: Candle[] = []
+  let price = 180 + Math.random() * 20
+
+  for (let i = count; i >= 0; i--) {
+    const open = price
+    const volatility = interval === '1m' || interval === '5m' ? 0.5 : interval === '1w' || interval === '1M' ? 8 : 3
+    const change = (Math.random() - 0.48) * volatility
+    const close = open + change
+    const high = Math.max(open, close) + Math.random() * volatility * 0.6
+    const low = Math.min(open, close) - Math.random() * volatility * 0.6
+    const volume = Math.floor(Math.random() * 50_000_000) + 10_000_000
+    result.push({
+      time: Math.floor((now - i * step) / 1000),
+      open: Math.round(open * 100) / 100,
+      high: Math.round(high * 100) / 100,
+      low: Math.round(low * 100) / 100,
+      close: Math.round(close * 100) / 100,
+      volume,
+    })
+    price = close
   }
   return result
 }

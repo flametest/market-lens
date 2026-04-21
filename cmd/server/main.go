@@ -19,8 +19,10 @@ import (
 	"github.com/flametest/market-lens/internal/config"
 	"github.com/flametest/market-lens/internal/data"
 	"github.com/flametest/market-lens/internal/data/finnhub"
+	"github.com/flametest/market-lens/internal/data/twelvedata"
 	"github.com/flametest/market-lens/internal/eventbus"
 	"github.com/flametest/market-lens/internal/execution"
+	"github.com/flametest/market-lens/pkg/exchange"
 	"github.com/flametest/market-lens/internal/strategy"
 	"github.com/flametest/market-lens/internal/strategy/risk"
 )
@@ -62,12 +64,23 @@ func main() {
 
 	repo := data.NewRepository(db)
 
-	provider := finnhub.NewProvider(
-		cfg.Finnhub.WebSocketURL,
-		cfg.Finnhub.BaseURL,
-		cfg.Finnhub.APIKey,
-		logger,
-	)
+	var provider exchange.DataProvider
+	switch cfg.DataProvider.Name {
+	case "finnhub":
+		provider = finnhub.NewProvider(
+			cfg.Finnhub.WebSocketURL,
+			cfg.Finnhub.BaseURL,
+			cfg.Finnhub.APIKey,
+			logger,
+		)
+	default:
+		provider = twelvedata.NewProvider(
+			cfg.DataProvider.BaseURL,
+			cfg.DataProvider.APIKey,
+			logger,
+		)
+	}
+
 	mgr := data.NewManager(provider, db, bus, logger)
 
 	analysisEngine := analysis.NewEngine(repo, bus, logger)
@@ -102,7 +115,7 @@ func main() {
 		}
 	}()
 
-	if cfg.Finnhub.APIKey != "" {
+	if cfg.DataProvider.APIKey != "" || cfg.Finnhub.APIKey != "" {
 		defaultSymbols := []string{"AAPL", "GOOGL", "MSFT", "AMZN", "NVDA"}
 		go func() {
 			if err := mgr.Start(context.Background(), defaultSymbols); err != nil {
