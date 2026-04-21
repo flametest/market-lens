@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flametest/market-lens/internal/ai"
 	"github.com/flametest/market-lens/internal/analysis"
 	"github.com/flametest/market-lens/internal/api"
 	"github.com/flametest/market-lens/internal/backtest"
@@ -75,8 +76,9 @@ func main() {
 	riskManager := risk.NewManager(repo, bus, logger)
 	backtestEngine := backtest.NewEngine(repo)
 	execEngine := execution.NewEngine(repo, bus, logger)
+	analyzer := ai.NewAnalyzer(repo, bus, logger, cfg.AI.APIKey, cfg.AI.Model)
 
-	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo, strategyEngine, backtestEngine, execEngine)
+	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo, strategyEngine, backtestEngine, execEngine, analyzer)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),

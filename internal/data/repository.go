@@ -390,6 +390,29 @@ func (r *Repository) SaveRiskEvent(ctx context.Context, re model.RiskEvent) erro
 	return err
 }
 
+func (r *Repository) GetRiskEvents(ctx context.Context, limit int) ([]model.RiskEvent, error) {
+	query := `SELECT id, type, sentiment_score, action, reason, timestamp FROM risk_events ORDER BY timestamp DESC`
+	args := []any{}
+	if limit > 0 {
+		query += fmt.Sprintf(` LIMIT %d`, limit)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []model.RiskEvent
+	for rows.Next() {
+		var re model.RiskEvent
+		if err := rows.Scan(&re.ID, &re.Type, &re.SentimentScore, &re.Action, &re.Reason, &re.Timestamp); err != nil {
+			return nil, err
+		}
+		events = append(events, re)
+	}
+	return events, rows.Err()
+}
+
 func GenerateID() string {
 	b := make([]byte, 8)
 	rand.Read(b)
