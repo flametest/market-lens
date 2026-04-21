@@ -99,25 +99,39 @@ export async function fetchStrategies(): Promise<StrategyConfig[]> {
     name: s.name,
     displayName: s.displayName || s.name,
     enabled: s.enabled,
-    status: s.enabled ? 'RUNNING' : 'STOPPED',
+    status: s.enabled ? 'RUNNING' as const : 'STOPPED' as const,
     symbols: s.symbols || [],
     params: s.params || {},
     aiEnabled: s.ai?.enabled || false,
     aiWeight: s.ai?.signalWeight || 0,
     pnl: 0,
     winRate: 0,
-    createdAt: new Date(s.createdAt * 1000).toISOString().slice(0, 10),
+    createdAt: s.createdAt ? new Date(s.createdAt * 1000).toISOString().slice(0, 10) : '',
   }))
 }
 
-export async function createStrategy(strategy: any): Promise<any> {
+export async function createStrategy(strategy: {
+  name: string
+  displayName: string
+  symbols: string[]
+  params: Record<string, string>
+  enabled: boolean
+  ai: { enabled: boolean; signalWeight: number }
+}): Promise<any> {
   return request('/strategies', {
     method: 'POST',
     body: JSON.stringify(strategy),
   })
 }
 
-export async function updateStrategy(id: string, strategy: any): Promise<any> {
+export async function updateStrategy(id: string, strategy: {
+  name: string
+  displayName: string
+  enabled: boolean
+  symbols: string[]
+  params: Record<string, any>
+  ai: { enabled: boolean; signalWeight: number }
+}): Promise<any> {
   return request(`/strategies/${id}`, {
     method: 'PUT',
     body: JSON.stringify(strategy),

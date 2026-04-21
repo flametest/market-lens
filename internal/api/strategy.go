@@ -27,12 +27,15 @@ func (h *StrategyHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *StrategyHandler) listStrategies(w http.ResponseWriter, r *http.Request) {
-	configs := h.engine.GetStrategies()
-	result := make([]model.StrategyConfig, 0, len(configs))
-	for _, cfg := range configs {
-		result = append(result, cfg)
+	configs, err := h.repo.GetStrategyConfigs(r.Context())
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, 500, err.Error())
+		return
 	}
-	WriteJSON(w, http.StatusOK, result)
+	if configs == nil {
+		configs = []model.StrategyConfig{}
+	}
+	WriteJSON(w, http.StatusOK, configs)
 }
 
 func (h *StrategyHandler) createStrategy(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +90,8 @@ func (h *StrategyHandler) updateStrategy(w http.ResponseWriter, r *http.Request)
 		WriteError(w, http.StatusInternalServerError, 500, err.Error())
 		return
 	}
+
+	h.engine.UpdateConfig(cfg.Name, cfg)
 
 	WriteJSON(w, http.StatusOK, cfg)
 }

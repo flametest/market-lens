@@ -33,10 +33,12 @@ export default function Strategy() {
     setToggling(s.id)
     try {
       await updateStrategy(s.id, {
-        ...s,
+        name: s.name,
+        displayName: s.displayName,
         enabled: !s.enabled,
-        params: Object.fromEntries(Object.entries(s.params).map(([k, v]) => [k, String(v)])),
         symbols: s.symbols,
+        params: Object.fromEntries(Object.entries(s.params).map(([k, v]) => [k, String(v)])),
+        ai: { enabled: s.aiEnabled, signalWeight: s.aiWeight },
       })
       const updated = strategies.map(st =>
         st.id === s.id
@@ -53,8 +55,14 @@ export default function Strategy() {
     setToggling(null)
   }
 
+  const [createError, setCreateError] = useState('')
+
   const handleCreate = async () => {
-    if (!newStrategy.displayName.trim()) return
+    if (!newStrategy.displayName.trim()) {
+      setCreateError('Display name is required')
+      return
+    }
+    setCreateError('')
     try {
       const created = await createStrategy({
         name: newStrategy.name,
@@ -95,10 +103,15 @@ export default function Strategy() {
     if (!selectedStrategy) return
     try {
       await updateStrategy(selectedStrategy.id, {
-        ...selectedStrategy,
-        params: Object.fromEntries(Object.entries(selectedStrategy.params).map(([k, v]) => [k, String(v)])),
+        name: selectedStrategy.name,
+        displayName: selectedStrategy.displayName,
+        enabled: selectedStrategy.enabled,
         symbols: selectedStrategy.symbols,
+        params: Object.fromEntries(Object.entries(selectedStrategy.params).map(([k, v]) => [k, String(v)])),
+        ai: { enabled: selectedStrategy.aiEnabled, signalWeight: selectedStrategy.aiWeight },
       })
+      const updated = { ...selectedStrategy }
+      setStrategies(prev => prev.map(s => s.id === updated.id ? updated : s))
       setShowConfigDialog(false)
     } catch (err) {
       console.error('Failed to save config:', err)
@@ -275,10 +288,11 @@ export default function Strategy() {
               <input
                 type="text"
                 value={newStrategy.displayName}
-                onChange={e => setNewStrategy(prev => ({ ...prev, displayName: e.target.value }))}
+                onChange={e => { setNewStrategy(prev => ({ ...prev, displayName: e.target.value })); setCreateError('') }}
                 placeholder="e.g. My MA Strategy"
-                className="input-field w-full"
+                className={`input-field w-full ${createError ? 'border-[var(--color-loss)]' : ''}`}
               />
+              {createError && <p className="text-xs text-loss mt-1">{createError}</p>}
             </div>
             <div>
               <label className="block text-xs text-[var(--color-text-muted)] mb-1.5">Symbols (comma separated)</label>

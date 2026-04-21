@@ -131,6 +131,14 @@ func (e *Engine) GetStrategies() map[string]model.StrategyConfig {
 	return result
 }
 
+func (e *Engine) UpdateConfig(name string, cfg model.StrategyConfig) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, ok := e.configs[name]; ok {
+		e.configs[name] = cfg
+	}
+}
+
 func positionSize(cash string, price decimal.Decimal, maxRatio float64) decimal.Decimal {
 	cashDec := decimal.RequireFromString(cash)
 	alloc := cashDec.Mul(decimal.NewFromFloat(maxRatio))
