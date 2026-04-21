@@ -1,12 +1,33 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Database, Shield, Bell, Server } from 'lucide-react'
-import { fetchAIConfig, updateAIConfig } from '../api'
+
+const BASE = '/api/v1'
+
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${url}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.message || `HTTP ${res.status}`)
+  }
+  const json = await res.json()
+  return json.data !== undefined ? json.data : json
+}
+
+type DataSource = {
+  name: string
+  market: string
+  type: string
+  status: string
+  enabled: boolean
+  switching?: boolean
+}
 
 export default function Settings() {
-  const [dataSources, setDataSources] = useState([
-    { name: 'Finnhub', market: 'US Stocks', type: 'WebSocket + REST', status: 'connected', enabled: true },
-    { name: 'Alpha Vantage', market: 'US Stocks', type: 'REST', status: 'standby', enabled: false },
-  ])
+  const [dataSources, setDataSources] = useState<DataSource[]>([])
+  const [switching, setSwitching] = useState<string | null>(null)
 
   const [systemMetrics] = useState([
     { label: 'CPU Usage', value: '12.3%', color: 'profit' },
@@ -33,10 +54,48 @@ export default function Settings() {
     { label: 'Backtest Complete', desc: 'Notify when backtest finishes', enabled: true },
   ])
 
-  const toggleDataSource = (index: number) => {
-    setDataSources(prev => prev.map((ds, i) =>
-      i === index ? { ...ds, enabled: !ds.enabled, status: !ds.enabled ? 'connected' : 'standby' } : ds
-    ))
+  useEffect(() => {
+    loadProvider()
+  }, [])
+
+  const loadProvider = async () => {
+    try {
+      const data = await request<{ active: string; providers: string[] }>('/settings/provider')
+      const providerMeta: Record<string, { market: string; type: string }> = {
+        twelvedata: { market: 'US Stocks', type: 'WebSocket + REST' },
+        finnhub: { market: 'US Stocks', type: 'WebSocket + REST' },
+      }
+      const sources: DataSource[] = (data.providers || []).map(name => ({
+        name,
+        market: providerMeta[name]?.market || 'Global',
+        type: providerMeta[name]?.type || 'REST',
+        status: name === data.active ? 'connected' : 'standby',
+        enabled: name === data.active,
+      }))
+      setDataSources(sources)
+    } catch {
+      setDataSources([
+        { name: 'twelvedata', market: 'US Stocks', type: 'WebSocket + REST', status: 'connected', enabled: true },
+      ])
+    }
+  }
+
+  const toggleDataSource = async (name: string) => {
+    const ds = dataSources.find(d => d.name === name)
+    if (!ds || ds.enabled || switching) return
+
+    setSwitching(name)
+    setDataSources(prev => prev.map(d => ({ ...d, switching: d.name === name })))
+    try {
+      await request('/settings/provider', {
+        method: 'PUT',
+        body: JSON.stringify({ name }),
+      })
+      await loadProvider()
+    } catch (err) {
+      console.error('Failed to switch provider:', err)
+    }
+    setSwitching(null)
   }
 
   const toggleRiskRule = (index: number) => {
@@ -51,10 +110,11 @@ export default function Settings() {
     ))
   }
 
-  const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
+  const Toggle = ({ on, onToggle, loading }: { on: boolean; onToggle: () => void; loading?: boolean }) => (
     <button
       onClick={onToggle}
-      className={`w-8 h-4 rounded-full transition-colors ${on ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-light)]'} relative cursor-pointer border-none`}
+      disabled={loading}
+      className={`w-8 h-4 rounded-full transition-colors ${on ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-light)]'} relative cursor-pointer border-none ${loading ? 'opacity-50' : ''}`}
     >
       <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${on ? 'left-[18px]' : 'left-0.5'}`} />
     </button>
@@ -73,22 +133,27 @@ export default function Settings() {
             </h2>
           </div>
           <div className="space-y-3">
-            {dataSources.map((ds, i) => (
+            {dataSources.map((ds) => (
               <div key={ds.name} className="card-elevated">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${ds.status === 'connected' ? 'bg-[var(--color-profit)] animate-pulse-soft' : 'bg-[var(--color-text-muted)]'}`} />
                     <span className="text-sm font-medium text-[var(--color-text-primary)]">{ds.name}</span>
                   </div>
-                  <Toggle on={ds.enabled} onToggle={() => toggleDataSource(i)} />
+                  <Toggle on={ds.enabled} onToggle={() => toggleDataSource(ds.name)} loading={ds.switching || switching === ds.name} />
                 </div>
                 <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
                   <span>{ds.market}</span>
                   <span>{ds.type}</span>
-                  <span className={`capitalize ${ds.status === 'connected' ? 'text-profit' : ''}`}>{ds.status}</span>
+                  <span className={`capitalize ${ds.status === 'connected' ? 'text-profit' : ''}`}>
+                    {ds.switching ? 'switching...' : ds.status}
+                  </span>
                 </div>
               </div>
             ))}
+            {dataSources.length === 0 && (
+              <div className="text-xs text-[var(--color-text-muted)]">No data providers configured. Set API keys in .env file.</div>
+            )}
           </div>
         </div>
 

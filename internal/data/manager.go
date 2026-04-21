@@ -2,7 +2,9 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/flametest/market-lens/internal/eventbus"
 	"github.com/flametest/market-lens/pkg/exchange"
@@ -10,23 +12,93 @@ import (
 )
 
 type Manager struct {
-	provider exchange.DataProvider
-	db       *DB
-	bus      *eventbus.InMemoryBus
-	logger   *slog.Logger
+	mu         sync.RWMutex
+	providers  map[string]exchange.DataProvider
+	activeName string
+	db         *DB
+	bus        *eventbus.InMemoryBus
+	logger     *slog.Logger
+	symbols    []string
 }
 
-func NewManager(provider exchange.DataProvider, db *DB, bus *eventbus.InMemoryBus, logger *slog.Logger) *Manager {
+func NewManager(providers map[string]exchange.DataProvider, activeName string, db *DB, bus *eventbus.InMemoryBus, logger *slog.Logger) *Manager {
 	return &Manager{
-		provider: provider,
-		db:       db,
-		bus:      bus,
-		logger:   logger,
+		providers:  providers,
+		activeName: activeName,
+		db:         db,
+		bus:        bus,
+		logger:     logger,
 	}
 }
 
+func (m *Manager) active() exchange.DataProvider {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.providers[m.activeName]
+}
+
+func (m *Manager) ActiveProviderName() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.activeName
+}
+
+func (m *Manager) ProviderNames() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	names := make([]string, 0, len(m.providers))
+	for name := range m.providers {
+		names = append(names, name)
+	}
+	return names
+}
+
+func (m *Manager) SwitchProvider(name string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	p, ok := m.providers[name]
+	if !ok {
+		return fmt.Errorf("provider not found: %s", name)
+	}
+
+	old := m.providers[m.activeName]
+	if old != nil {
+		old.Close()
+	}
+
+	m.activeName = name
+
+	if len(m.symbols) > 0 {
+		if err := p.Connect(context.Background()); err != nil {
+			m.logger.Error("failed to connect provider", slog.String("provider", name), slog.String("error", err.Error()))
+			return err
+		}
+		p.SetOnTick(func(tick model.Tick) {
+			if err := m.saveAndPublishTick(context.Background(), tick); err != nil {
+				m.logger.Error("failed to save tick",
+					slog.String("symbol", tick.Symbol),
+					slog.String("error", err.Error()),
+				)
+			}
+		})
+		if err := p.Subscribe(m.symbols); err != nil {
+			m.logger.Error("failed to subscribe", slog.String("provider", name), slog.String("error", err.Error()))
+			return err
+		}
+	}
+
+	m.logger.Info("switched data provider", slog.String("from", m.activeName), slog.String("to", name))
+	return nil
+}
+
 func (m *Manager) Start(ctx context.Context, symbols []string) error {
-	m.provider.SetOnTick(func(tick model.Tick) {
+	m.mu.Lock()
+	m.symbols = symbols
+	p := m.providers[m.activeName]
+	m.mu.Unlock()
+
+	p.SetOnTick(func(tick model.Tick) {
 		if err := m.saveAndPublishTick(ctx, tick); err != nil {
 			m.logger.Error("failed to save tick",
 				slog.String("symbol", tick.Symbol),
@@ -35,11 +107,11 @@ func (m *Manager) Start(ctx context.Context, symbols []string) error {
 		}
 	})
 
-	if err := m.provider.Connect(ctx); err != nil {
+	if err := p.Connect(ctx); err != nil {
 		return err
 	}
 
-	if err := m.provider.Subscribe(symbols); err != nil {
+	if err := p.Subscribe(symbols); err != nil {
 		return err
 	}
 
@@ -48,7 +120,7 @@ func (m *Manager) Start(ctx context.Context, symbols []string) error {
 }
 
 func (m *Manager) Stop() error {
-	return m.provider.Close()
+	return m.active().Close()
 }
 
 func (m *Manager) saveAndPublishTick(ctx context.Context, tick model.Tick) error {
@@ -129,7 +201,7 @@ func (m *Manager) GetLatestTick(ctx context.Context, symbol string) (*model.Tick
 }
 
 func (m *Manager) FetchAndStoreCandles(ctx context.Context, symbol string, interval model.Interval, start, end int64) ([]model.Candle, error) {
-	candles, err := m.provider.FetchCandles(ctx, symbol, interval, start, end)
+	candles, err := m.active().FetchCandles(ctx, symbol, interval, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -142,9 +214,9 @@ func (m *Manager) FetchAndStoreCandles(ctx context.Context, symbol string, inter
 }
 
 func (m *Manager) GetQuote(ctx context.Context, symbol string) (*model.Tick, error) {
-	return m.provider.FetchQuote(ctx, symbol)
+	return m.active().FetchQuote(ctx, symbol)
 }
 
 func (m *Manager) SearchSymbols(ctx context.Context, query string) ([]model.SymbolInfo, error) {
-	return m.provider.SearchSymbols(ctx, query)
+	return m.active().SearchSymbols(ctx, query)
 }

@@ -38,6 +38,7 @@ func NewWSClient(baseURL, apiKey string, logger *slog.Logger) *WSClient {
 
 func (w *WSClient) Connect(ctx context.Context) error {
 	w.ctx, w.cancel = context.WithCancel(ctx)
+	w.ready = make(chan struct{})
 
 	url := w.url + "?apikey=" + w.apiKey
 	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)

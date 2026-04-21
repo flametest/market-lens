@@ -67,17 +67,17 @@ func main() {
 
 	repo := data.NewRepository(db)
 
-	var provider exchange.DataProvider
-	switch cfg.DataProvider.Name {
-	case "finnhub":
-		provider = finnhub.NewProvider(
+	providers := make(map[string]exchange.DataProvider)
+	if cfg.Finnhub.APIKey != "" {
+		providers["finnhub"] = finnhub.NewProvider(
 			cfg.Finnhub.WebSocketURL,
 			cfg.Finnhub.BaseURL,
 			cfg.Finnhub.APIKey,
 			logger,
 		)
-	default:
-		provider = twelvedata.NewProvider(
+	}
+	if cfg.DataProvider.APIKey != "" {
+		providers["twelvedata"] = twelvedata.NewProvider(
 			cfg.DataProvider.BaseURL,
 			cfg.DataProvider.WebSocketURL,
 			cfg.DataProvider.APIKey,
@@ -85,7 +85,12 @@ func main() {
 		)
 	}
 
-	mgr := data.NewManager(provider, db, bus, logger)
+	activeProvider := cfg.DataProvider.Name
+	if activeProvider == "" {
+		activeProvider = "twelvedata"
+	}
+
+	mgr := data.NewManager(providers, activeProvider, db, bus, logger)
 
 	analysisEngine := analysis.NewEngine(repo, bus, logger)
 
