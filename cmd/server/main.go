@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/flametest/market-lens/internal/ai"
 	"github.com/flametest/market-lens/internal/analysis"
 	"github.com/flametest/market-lens/internal/api"
@@ -30,6 +31,8 @@ import (
 func main() {
 	configPath := flag.String("config", "configs/config.yaml", "config file path")
 	flag.Parse()
+
+	godotenv.Load()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
