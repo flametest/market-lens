@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Play, Download, BarChart3 } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { mockBacktests, equityCurveData } from '../mock/data'
-import type { AIMode } from '../types'
+import { fetchBacktests, runBacktest } from '../api'
+import type { AIMode, BacktestRun } from '../types'
 
 const aiModeLabels: Record<AIMode, string> = {
   off: 'Technical Only',
@@ -11,7 +12,34 @@ const aiModeLabels: Record<AIMode, string> = {
 }
 
 export default function Backtest() {
-  const [selectedBt, setSelectedBt] = useState(mockBacktests[0])
+  const [backtests, setBacktests] = useState<BacktestRun[]>(mockBacktests)
+  const [selectedBt, setSelectedBt] = useState<BacktestRun>(mockBacktests[0])
+  const [loading, setLoading] = useState(false)
+  const [equity, setEquity] = useState(equityCurveData)
+
+  useEffect(() => {
+    fetchBacktests().then(data => {
+      if (data && data.length > 0) {
+        setBacktests(data)
+        setSelectedBt(data[0])
+      }
+    }).catch(() => {})
+  }, [])
+
+  const handleRun = async () => {
+    setLoading(true)
+    try {
+      const result = await runBacktest({
+        symbol: 'AAPL', strategy: { name: 'ma_crossover' },
+        startDate: Date.now() - 365 * 86400000, endDate: Date.now(),
+        interval: '1d', initialCash: '100000', commission: '0.001', slippage: '0.001',
+        risk: {}, aiMode: 'off',
+      })
+      setBacktests(prev => [result, ...prev])
+      setSelectedBt(result)
+    } catch { /* fallback to mock */ }
+    setLoading(false)
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -66,8 +94,8 @@ export default function Backtest() {
             <input type="text" className="input-field" defaultValue="0.001" />
           </div>
           <div className="flex items-end">
-            <button className="btn-primary flex items-center gap-2 w-full justify-center">
-              <Play size={14} /> Run Backtest
+            <button onClick={handleRun} disabled={loading} className="btn-primary flex items-center gap-2 w-full justify-center">
+              <Play size={14} /> {loading ? 'Running...' : 'Run Backtest'}
             </button>
           </div>
         </div>
@@ -103,7 +131,7 @@ export default function Backtest() {
               </button>
             </div>
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={equityCurveData}>
+              <AreaChart data={equity}>
                 <defs>
                   <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#6366f1" stopOpacity={0.2} />
@@ -163,7 +191,7 @@ export default function Backtest() {
                 History
               </h3>
               <div className="space-y-2">
-                {mockBacktests.map(bt => (
+                {backtests.map(bt => (
                   <div
                     key={bt.id}
                     onClick={() => setSelectedBt(bt)}

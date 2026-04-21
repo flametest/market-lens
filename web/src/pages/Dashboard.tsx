@@ -1,12 +1,36 @@
+import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, Activity, Brain, Zap, Target } from 'lucide-react'
 import MetricCard from '../components/common/MetricCard'
 import { mockAccount, mockWatchlist, mockSignals, mockStrategies, mockSentiments } from '../mock/data'
+import { fetchSignals, fetchStrategies, fetchSentiments, fetchSymbols } from '../api'
+import type { Tick, Signal, StrategyConfig, SentimentResult } from '../types'
 
 export default function Dashboard() {
-  const topGainers = [...mockWatchlist].sort((a, b) => b.changePercent - a.changePercent).slice(0, 3)
-  const topLosers = [...mockWatchlist].sort((a, b) => a.changePercent - b.changePercent).slice(0, 3)
-  const recentSignals = mockSignals.slice(0, 5)
-  const activeStrategies = mockStrategies.filter(s => s.status === 'RUNNING')
+  const [watchlist, setWatchlist] = useState<Tick[]>(mockWatchlist)
+  const [signals, setSignals] = useState<Signal[]>(mockSignals)
+  const [strategies, setStrategies] = useState<StrategyConfig[]>(mockStrategies)
+  const [sentiments, setSentiments] = useState<SentimentResult[]>(mockSentiments)
+  const account = mockAccount
+
+  useEffect(() => {
+    fetchSignals().then(setSignals).catch(() => {})
+    fetchStrategies().then(setStrategies).catch(() => {})
+    fetchSentiments().then(setSentiments).catch(() => {})
+    fetchSymbols().then((raw: any[]) => {
+      if (raw && raw.length > 0) {
+        setWatchlist(raw.map((s: any) => ({
+          symbol: s.code,
+          price: 0, volume: 0, change: 0, changePercent: 0,
+          high: 0, low: 0, open: 0, timestamp: Date.now(),
+        })))
+      }
+    }).catch(() => {})
+  }, [])
+
+  const topGainers = [...watchlist].sort((a, b) => b.changePercent - a.changePercent).slice(0, 3)
+  const topLosers = [...watchlist].sort((a, b) => a.changePercent - b.changePercent).slice(0, 3)
+  const recentSignals = signals.slice(0, 5)
+  const activeStrategies = strategies.filter(s => s.status === 'RUNNING')
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -20,24 +44,24 @@ export default function Dashboard() {
       <div className="grid grid-cols-4 gap-4">
         <MetricCard
           label="Total Value"
-          value={`$${mockAccount.totalValue.toLocaleString()}`}
+          value={`$${account.totalValue.toLocaleString()}`}
           change={2.45}
           icon={<TrendingUp size={14} />}
         />
         <MetricCard
           label="Daily PnL"
-          value={`$${mockAccount.dailyPnl.toLocaleString()}`}
+          value={`$${account.dailyPnl.toLocaleString()}`}
           change={1.23}
           icon={<Activity size={14} />}
         />
         <MetricCard
           label="Active Signals"
-          value={String(mockSignals.length)}
+          value={String(signals.length)}
           icon={<Zap size={14} />}
         />
         <MetricCard
           label="Running Strategies"
-          value={`${activeStrategies.length}/${mockStrategies.length}`}
+          value={`${activeStrategies.length}/${strategies.length}`}
           icon={<Target size={14} />}
         />
       </div>
@@ -136,7 +160,7 @@ export default function Dashboard() {
             Active Strategies
           </h2>
           <div className="space-y-3">
-            {mockStrategies.map((s) => (
+            {strategies.map((s) => (
               <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-elevated)] border border-[var(--color-border)]">
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${s.status === 'RUNNING' ? 'bg-[var(--color-profit)] animate-pulse-soft' : 'bg-[var(--color-text-muted)]'}`} />
@@ -166,7 +190,7 @@ export default function Dashboard() {
             </h2>
           </div>
           <div className="space-y-3">
-            {mockSentiments.slice(0, 3).map((s) => (
+            {sentiments.slice(0, 3).map((s) => (
               <div key={s.id} className="p-3 rounded-lg bg-[var(--color-elevated)] border border-[var(--color-border)]">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-medium text-[var(--color-text-primary)]">

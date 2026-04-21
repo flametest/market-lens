@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Star, Search, ArrowUpDown } from 'lucide-react'
 import { mockWatchlist } from '../mock/data'
+import { fetchSymbols } from '../api'
 import type { Tick } from '../types'
 
 type SortKey = keyof Tick
@@ -10,8 +11,21 @@ export default function MarketOverview() {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('symbol')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [watchlist, setWatchlist] = useState<Tick[]>(mockWatchlist)
 
-  const filtered = mockWatchlist.filter(t =>
+  useEffect(() => {
+    fetchSymbols(search || undefined).then((raw: any[]) => {
+      if (raw && raw.length > 0) {
+        setWatchlist(raw.map((s: any) => ({
+          symbol: s.code,
+          price: 0, volume: 0, change: 0, changePercent: 0,
+          high: 0, low: 0, open: 0, timestamp: Date.now(),
+        })))
+      }
+    }).catch(() => {})
+  }, [search])
+
+  const filtered = watchlist.filter(t =>
     t.symbol.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -83,7 +97,6 @@ export default function MarketOverview() {
                 <td>
                   <div className="flex items-center gap-2">
                     <span className="font-data text-sm font-semibold text-[var(--color-text-primary)]">{t.symbol}</span>
-                    <span className="text-xs text-[var(--color-text-muted)]">{t.symbol === 'AAPL' ? 'Apple Inc.' : t.symbol === 'GOOGL' ? 'Alphabet Inc.' : t.symbol === 'MSFT' ? 'Microsoft Corp.' : t.symbol === 'AMZN' ? 'Amazon.com Inc.' : t.symbol === 'NVDA' ? 'NVIDIA Corp.' : t.symbol === 'META' ? 'Meta Platforms' : t.symbol === 'TSLA' ? 'Tesla Inc.' : 'JPMorgan Chase'}</span>
                   </div>
                 </td>
                 <td className="font-data text-sm font-medium text-[var(--color-text-primary)]">

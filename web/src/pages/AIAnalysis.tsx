@@ -1,13 +1,36 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Brain, Send, AlertTriangle, ShieldAlert, ThermometerSun } from 'lucide-react'
 import { mockSentiments, mockRiskEvents } from '../mock/data'
-import type { SentimentResult } from '../types'
+import { fetchSentiments, fetchRiskEvents, analyzeSentiment } from '../api'
+import type { SentimentResult, RiskEvent } from '../types'
 
 export default function AIAnalysis() {
   const [inputText, setInputText] = useState('')
-  const [sentiments] = useState<SentimentResult[]>(mockSentiments)
+  const [sentiments, setSentiments] = useState<SentimentResult[]>(mockSentiments)
+  const [riskEvents, setRiskEvents] = useState<RiskEvent[]>(mockRiskEvents)
+  const [analyzing, setAnalyzing] = useState(false)
 
-  const riskIcons = {
+  useEffect(() => {
+    fetchSentiments().then(data => {
+      if (data && data.length > 0) setSentiments(data)
+    }).catch(() => {})
+    fetchRiskEvents().then(data => {
+      if (data && data.length > 0) setRiskEvents(data)
+    }).catch(() => {})
+  }, [])
+
+  const handleAnalyze = async () => {
+    if (!inputText.trim()) return
+    setAnalyzing(true)
+    try {
+      const result = await analyzeSentiment(inputText)
+      setSentiments(prev => [result, ...prev])
+      setInputText('')
+    } catch { /* fallback silent */ }
+    setAnalyzing(false)
+  }
+
+  const riskIcons: Record<string, any> = {
     panic: <ShieldAlert size={14} className="text-loss" />,
     overheat: <ThermometerSun size={14} className="text-warn" />,
     pause: <AlertTriangle size={14} className="text-warn" />,
@@ -33,8 +56,12 @@ export default function AIAnalysis() {
             placeholder="Paste news, earnings report, or announcement text here to analyze sentiment..."
             className="input-field min-h-[80px] resize-none flex-1 text-sm"
           />
-          <button className="btn-primary flex items-center gap-2 self-end" disabled={!inputText.trim()}>
-            <Send size={14} /> Analyze
+          <button
+            onClick={handleAnalyze}
+            disabled={!inputText.trim() || analyzing}
+            className="btn-primary flex items-center gap-2 self-end"
+          >
+            <Send size={14} /> {analyzing ? 'Analyzing...' : 'Analyze'}
           </button>
         </div>
       </div>
@@ -103,10 +130,10 @@ export default function AIAnalysis() {
               AI Risk Events
             </h2>
             <div className="space-y-2">
-              {mockRiskEvents.map(e => (
+              {riskEvents.map(e => (
                 <div key={e.id} className="card-elevated">
                   <div className="flex items-center gap-2 mb-2">
-                    {riskIcons[e.type]}
+                    {riskIcons[e.type] || <AlertTriangle size={14} className="text-warn" />}
                     <span className={`badge ${e.type === 'panic' ? 'badge-negative' : 'badge-running'}`}>
                       {e.type.toUpperCase()}
                     </span>

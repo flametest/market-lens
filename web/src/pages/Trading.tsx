@@ -1,12 +1,32 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import { mockAccount, mockPositions, mockOrders, dailyPnlData } from '../mock/data'
+import { fetchAccount, fetchPositions, fetchOrders } from '../api'
+import type { Position, Order } from '../types'
 
 type Tab = 'positions' | 'orders' | 'history'
 
 export default function Trading() {
   const [activeTab, setActiveTab] = useState<Tab>('positions')
+  const [account, setAccount] = useState(mockAccount)
+  const [positions, setPositions] = useState<Position[]>(mockPositions)
+  const [orders, setOrders] = useState<Order[]>(mockOrders)
+  const [pnlData] = useState(dailyPnlData)
+
+  useEffect(() => {
+    fetchAccount().then((raw: any) => {
+      if (raw && raw.accountId) {
+        // Account exists, keep mock for display until full integration
+      }
+    }).catch(() => {})
+    fetchPositions().then(data => {
+      if (data && data.length > 0) setPositions(data)
+    }).catch(() => {})
+    fetchOrders().then(data => {
+      if (data && data.length > 0) setOrders(data)
+    }).catch(() => {})
+  }, [])
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -22,28 +42,28 @@ export default function Trading() {
         <div className="card">
           <div className="text-xs text-[var(--color-text-muted)] mb-1">Total Value</div>
           <div className="font-data text-xl font-semibold text-[var(--color-text-primary)]">
-            ${mockAccount.totalValue.toLocaleString()}
+            ${account.totalValue.toLocaleString()}
           </div>
           <div className="font-data text-xs text-profit mt-1">
-            +{(mockAccount.totalValue / 100000 * 100 - 100).toFixed(1)}%
+            +{(account.totalValue / 100000 * 100 - 100).toFixed(1)}%
           </div>
         </div>
         <div className="card">
           <div className="text-xs text-[var(--color-text-muted)] mb-1">Available Cash</div>
           <div className="font-data text-xl font-semibold text-[var(--color-text-primary)]">
-            ${mockAccount.cash.toLocaleString()}
+            ${account.cash.toLocaleString()}
           </div>
         </div>
         <div className="card">
           <div className="text-xs text-[var(--color-text-muted)] mb-1">Unrealized PnL</div>
-          <div className={`font-data text-xl font-semibold ${mockAccount.unrealizedPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
-            {mockAccount.unrealizedPnl >= 0 ? '+' : ''}${mockAccount.unrealizedPnl.toLocaleString()}
+          <div className={`font-data text-xl font-semibold ${account.unrealizedPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+            {account.unrealizedPnl >= 0 ? '+' : ''}${account.unrealizedPnl.toLocaleString()}
           </div>
         </div>
         <div className="card">
           <div className="text-xs text-[var(--color-text-muted)] mb-1">Daily PnL</div>
-          <div className={`font-data text-xl font-semibold ${mockAccount.dailyPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
-            {mockAccount.dailyPnl >= 0 ? '+' : ''}${mockAccount.dailyPnl.toLocaleString()}
+          <div className={`font-data text-xl font-semibold ${account.dailyPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+            {account.dailyPnl >= 0 ? '+' : ''}${account.dailyPnl.toLocaleString()}
           </div>
         </div>
       </div>
@@ -53,7 +73,7 @@ export default function Trading() {
           Daily PnL
         </h3>
         <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={dailyPnlData}>
+          <BarChart data={pnlData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1e2433" vertical={false} />
             <XAxis
               dataKey="date"
@@ -73,7 +93,7 @@ export default function Trading() {
               formatter={(v) => [`$${Number(v).toLocaleString()}`, 'PnL']}
             />
             <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
-              {dailyPnlData.map((entry, index) => (
+              {pnlData.map((entry, index) => (
                 <Cell key={index} fill={entry.pnl >= 0 ? '#10b981' : '#ef4444'} fillOpacity={0.7} />
               ))}
             </Bar>
@@ -112,7 +132,7 @@ export default function Trading() {
               </tr>
             </thead>
             <tbody>
-              {mockPositions.map(p => (
+              {positions.map(p => (
                 <tr key={p.symbol}>
                   <td>
                     <div className="flex items-center gap-2">
@@ -157,7 +177,7 @@ export default function Trading() {
               </tr>
             </thead>
             <tbody>
-              {mockOrders.map(o => (
+              {orders.map(o => (
                 <tr key={o.id}>
                   <td className="text-xs">{new Date(o.createdAt).toLocaleString()}</td>
                   <td className="font-data text-sm font-medium text-[var(--color-text-primary)]">{o.symbol}</td>

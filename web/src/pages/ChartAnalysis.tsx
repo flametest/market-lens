@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, type IChartApi, ColorType, CandlestickSeries, LineSeries } from 'lightweight-charts'
 import { mockCandles, mockWatchlist } from '../mock/data'
-import type { Interval } from '../types'
+import { fetchCandles, fetchQuote } from '../api'
+import type { Interval, Candle, Tick } from '../types'
 
 const intervals: Interval[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
 const indicators = ['MA(5)', 'MA(20)', 'EMA(12)', 'RSI', 'MACD', 'Bollinger']
@@ -12,9 +13,23 @@ export default function ChartAnalysis() {
   const [activeSymbol] = useState('AAPL')
   const [activeInterval, setActiveInterval] = useState<Interval>('1d')
   const [activeIndicators, setActiveIndicators] = useState<string[]>(['MA(5)', 'MA(20)'])
+  const [candles, setCandles] = useState<Candle[]>(mockCandles)
+  const [currentTick, setCurrentTick] = useState<Tick | undefined>(mockWatchlist.find(t => t.symbol === 'AAPL'))
 
   useEffect(() => {
-    if (!chartContainerRef.current) return
+    fetchCandles(activeSymbol, activeInterval).then(data => {
+      if (data && data.length > 0) setCandles(data)
+    }).catch(() => {})
+  }, [activeSymbol, activeInterval])
+
+  useEffect(() => {
+    fetchQuote(activeSymbol).then(tick => {
+      if (tick) setCurrentTick(tick)
+    }).catch(() => {})
+  }, [activeSymbol])
+
+  useEffect(() => {
+    if (!chartContainerRef.current || candles.length === 0) return
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -49,7 +64,7 @@ export default function ChartAnalysis() {
       wickDownColor: '#ef4444',
     })
 
-    series.setData(mockCandles.map(c => ({
+    series.setData(candles.map(c => ({
       time: c.time as number as import('lightweight-charts').UTCTimestamp,
       open: c.open,
       high: c.high,
@@ -64,7 +79,7 @@ export default function ChartAnalysis() {
         priceLineVisible: false,
         lastValueVisible: false,
       })
-      ma5.setData(computeMA(mockCandles, 5))
+      ma5.setData(computeMA(candles, 5))
     }
 
     if (activeIndicators.includes('MA(20)')) {
@@ -74,7 +89,7 @@ export default function ChartAnalysis() {
         priceLineVisible: false,
         lastValueVisible: false,
       })
-      ma20.setData(computeMA(mockCandles, 20))
+      ma20.setData(computeMA(candles, 20))
     }
 
     chart.timeScale().fitContent()
@@ -92,15 +107,13 @@ export default function ChartAnalysis() {
       window.removeEventListener('resize', handleResize)
       chart.remove()
     }
-  }, [activeInterval, activeIndicators])
+  }, [activeInterval, activeIndicators, candles])
 
   const toggleIndicator = (ind: string) => {
     setActiveIndicators(prev =>
       prev.includes(ind) ? prev.filter(i => i !== ind) : [...prev, ind]
     )
   }
-
-  const currentTick = mockWatchlist.find(t => t.symbol === activeSymbol)
 
   return (
     <div className="space-y-4 animate-fade-in">

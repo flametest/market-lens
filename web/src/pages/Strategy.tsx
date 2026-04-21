@@ -1,11 +1,21 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Play, Square, Settings2, Plus, Brain } from 'lucide-react'
 import { mockStrategies } from '../mock/data'
+import { fetchStrategies } from '../api'
 import type { StrategyConfig } from '../types'
 
 export default function Strategy() {
-  const [strategies] = useState<StrategyConfig[]>(mockStrategies)
+  const [strategies, setStrategies] = useState<StrategyConfig[]>(mockStrategies)
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyConfig | null>(mockStrategies[0])
+
+  useEffect(() => {
+    fetchStrategies().then(data => {
+      if (data && data.length > 0) {
+        setStrategies(data)
+        setSelectedStrategy(data[0])
+      }
+    }).catch(() => {})
+  }, [])
 
   return (
     <div className="space-y-6 animate-fade-in">

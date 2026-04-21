@@ -33,14 +33,30 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			next.ServeHTTP(w, r)
-			logger.Info("request",
+			ww := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			next.ServeHTTP(ww, r)
+			log := slog.Default()
+			if logger != nil {
+				log = logger
+			}
+			log.Info("request",
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
+				slog.Int("status", ww.statusCode),
 				slog.Duration("duration", time.Since(start)),
 			)
 		})
 	}
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *responseWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
 }
 
 func RecoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {

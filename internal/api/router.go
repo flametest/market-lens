@@ -50,6 +50,7 @@ func NewRouter(corsOrigins []string, mgr *data.Manager, repo *data.Repository, s
 	}
 
 	var handler http.Handler = mux
+	handler = LoggingMiddleware(nil)(handler)
 	handler = CORSMiddleware(corsOrigins)(handler)
 	return handler
 }
