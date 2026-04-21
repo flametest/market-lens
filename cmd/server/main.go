@@ -78,7 +78,13 @@ func main() {
 	execEngine := execution.NewEngine(repo, bus, logger)
 	analyzer := ai.NewAnalyzer(repo, bus, logger, cfg.AI.APIKey, cfg.AI.Model)
 
-	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo, strategyEngine, backtestEngine, execEngine, analyzer)
+	wsHub := api.NewHub(logger)
+	go wsHub.Run()
+
+	wsBridge := api.NewBridge(wsHub, bus, logger)
+	wsBridge.Start()
+
+	router := api.NewRouter(cfg.Server.CORSOrigins, mgr, repo, strategyEngine, backtestEngine, execEngine, analyzer, wsHub)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
