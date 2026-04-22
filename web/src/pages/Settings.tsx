@@ -100,6 +100,22 @@ export default function Settings() {
     }
   }
 
+  const loadRiskConfig = async () => {
+    try {
+      const data = await request<{ rules: { name: string; value: string; enabled: boolean }[] }>('/settings/risk')
+      if (data.rules && data.rules.length > 0) setRiskRules(data.rules)
+    } catch {}
+  }
+
+  const saveRiskConfig = async (rules: typeof riskRules) => {
+    try {
+      await request('/settings/risk', {
+        method: 'PUT',
+        body: JSON.stringify({ rules }),
+      })
+    } catch {}
+  }
+
   const toggleDataSource = async (name: string) => {
     const ds = dataSources.find(d => d.name === name)
     if (!ds || ds.enabled || switching) return
