@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import { mockAccount, mockPositions, mockOrders, dailyPnlData } from '../mock/data'
-import { fetchAccount, fetchPositions, fetchOrders } from '../api'
+import { fetchAccount, fetchPositions, fetchOrders, submitOrder } from '../api'
 import { getWSClient } from '../ws'
 import type { Position, Order } from '../types'
 
@@ -14,6 +14,45 @@ export default function Trading() {
   const [positions, setPositions] = useState<Position[]>(mockPositions)
   const [orders, setOrders] = useState<Order[]>(mockOrders)
   const [pnlData] = useState(dailyPnlData)
+  const [orderSymbol, setOrderSymbol] = useState('AAPL')
+  const [orderSide, setOrderSide] = useState<'BUY' | 'SELL'>('BUY')
+  const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT'>('MARKET')
+  const [orderQty, setOrderQty] = useState('100')
+  const [orderPrice, setOrderPrice] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [orderError, setOrderError] = useState('')
+
+  const handleSubmitOrder = async () => {
+    setSubmitting(true)
+    setOrderError('')
+    try {
+      const qty = Number(orderQty)
+      const price = orderType === 'LIMIT' ? Number(orderPrice) : 0
+      if (!orderSymbol || qty <= 0) {
+        setOrderError('Symbol and quantity are required')
+        setSubmitting(false)
+        return
+      }
+      if (orderType === 'LIMIT' && price <= 0) {
+        setOrderError('Limit price is required')
+        setSubmitting(false)
+        return
+      }
+      await submitOrder({ symbol: orderSymbol, side: orderSide, type: orderType, quantity: qty, price })
+      // Refresh data
+      const [raw, posData, ordData] = await Promise.all([
+        fetchAccount().catch(() => null),
+        fetchPositions().catch(() => []),
+        fetchOrders().catch(() => []),
+      ])
+      if (raw && raw.totalValue > 0) setAccount({ ...mockAccount, ...raw, totalValue: Number(raw.totalValue), cash: Number(raw.cash) })
+      if (posData && posData.length > 0) setPositions(posData)
+      if (ordData && ordData.length > 0) setOrders(ordData)
+    } catch (err: any) {
+      setOrderError(err?.message || 'Order failed')
+    }
+    setSubmitting(false)
+  }
 
   useEffect(() => {
     fetchAccount().then((raw: any) => {
@@ -81,6 +120,64 @@ export default function Trading() {
             {account.dailyPnl >= 0 ? '+' : ''}${account.dailyPnl.toLocaleString()}
           </div>
         </div>
+      </div>
+
+      <div className="card">
+        <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-4">
+          New Order
+        </h3>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Symbol</label>
+            <input type="text" value={orderSymbol} onChange={e => setOrderSymbol(e.target.value.toUpperCase())}
+              placeholder="AAPL" className="input-field w-full text-xs" />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Side</label>
+            <div className="flex gap-1">
+              <button onClick={() => setOrderSide('BUY')}
+                className={`flex-1 py-1.5 rounded-md text-xs font-medium border-none cursor-pointer transition-colors ${
+                  orderSide === 'BUY' ? 'bg-[var(--color-profit)] text-white' : 'bg-[var(--color-elevated)] text-[var(--color-text-muted)]'
+                }`}>Buy</button>
+              <button onClick={() => setOrderSide('SELL')}
+                className={`flex-1 py-1.5 rounded-md text-xs font-medium border-none cursor-pointer transition-colors ${
+                  orderSide === 'SELL' ? 'bg-[var(--color-loss)] text-white' : 'bg-[var(--color-elevated)] text-[var(--color-text-muted)]'
+                }`}>Sell</button>
+            </div>
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Type</label>
+            <div className="flex gap-1">
+              <button onClick={() => setOrderType('MARKET')}
+                className={`flex-1 py-1.5 rounded-md text-xs font-medium border-none cursor-pointer transition-colors ${
+                  orderType === 'MARKET' ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-elevated)] text-[var(--color-text-muted)]'
+                }`}>Market</button>
+              <button onClick={() => setOrderType('LIMIT')}
+                className={`flex-1 py-1.5 rounded-md text-xs font-medium border-none cursor-pointer transition-colors ${
+                  orderType === 'LIMIT' ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-elevated)] text-[var(--color-text-muted)]'
+                }`}>Limit</button>
+            </div>
+          </div>
+          <div className="w-24">
+            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Quantity</label>
+            <input type="number" value={orderQty} onChange={e => setOrderQty(e.target.value)}
+              className="input-field w-full text-xs" min="1" />
+          </div>
+          {orderType === 'LIMIT' && (
+            <div className="w-28">
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">Price ($)</label>
+              <input type="number" value={orderPrice} onChange={e => setOrderPrice(e.target.value)}
+                placeholder="0.00" className="input-field w-full text-xs" min="0" step="0.01" />
+            </div>
+          )}
+          <button onClick={handleSubmitOrder} disabled={submitting}
+            className={`px-5 py-1.5 rounded-md text-xs font-semibold text-white border-none cursor-pointer transition-colors ${
+              submitting ? 'opacity-50' : ''
+            } ${orderSide === 'BUY' ? 'bg-[var(--color-profit)] hover:opacity-90' : 'bg-[var(--color-loss)] hover:opacity-90'}`}>
+            {submitting ? 'Submitting...' : `${orderSide} ${orderSymbol}`}
+          </button>
+        </div>
+        {orderError && <p className="text-xs text-loss mt-2">{orderError}</p>}
       </div>
 
       <div className="card">

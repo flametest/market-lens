@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Star, Search, ArrowUpDown, RefreshCw, Clock } from 'lucide-react'
+import { Star, Search, ArrowUpDown, RefreshCw, Clock, Plus, X } from 'lucide-react'
 import { mockWatchlist } from '../mock/data'
 import { fetchSymbols, fetchQuote } from '../api'
 import { getWSClient } from '../ws'
@@ -25,6 +25,21 @@ const symbolNames: Record<string, string> = {
   TSLA: 'Tesla Inc.', JPM: 'JPMorgan Chase',
 }
 
+const STORAGE_KEY = 'market-lens-groups'
+
+type GroupMap = Record<string, string[]> // group name -> symbol list
+
+function loadGroups(): GroupMap {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function saveGroups(groups: GroupMap) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
+}
+
 export default function MarketOverview() {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('symbol')
@@ -34,6 +49,13 @@ export default function MarketOverview() {
   const [refreshMs, setRefreshMs] = useState(10000)
   const [showRefreshMenu, setShowRefreshMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Groups
+  const [groups, setGroups] = useState<GroupMap>(loadGroups)
+  const [activeGroup, setActiveGroup] = useState<string>('all')
+  const [newGroupName, setNewGroupName] = useState('')
+  const [showGroupInput, setShowGroupInput] = useState(false)
+  const [managingSymbol, setManagingSymbol] = useState<string | null>(null)
 
   const loadData = useCallback(async (q?: string) => {
     setLoading(true)
@@ -101,9 +123,58 @@ export default function MarketOverview() {
 
   const activeRefreshLabel = REFRESH_OPTIONS.find(o => o.ms === refreshMs)?.label || 'Off'
 
-  const filtered = watchlist.filter(t =>
-    t.symbol.toLowerCase().includes(search.toLowerCase())
-  )
+  const createGroup = () => {
+    const name = newGroupName.trim()
+    if (!name || groups[name]) return
+    const updated = { ...groups, [name]: [] }
+    setGroups(updated)
+    saveGroups(updated)
+    setNewGroupName('')
+    setShowGroupInput(false)
+    setActiveGroup(name)
+  }
+
+  const deleteGroup = (name: string) => {
+    const updated = { ...groups }
+    delete updated[name]
+    setGroups(updated)
+    saveGroups(updated)
+    if (activeGroup === name) setActiveGroup('all')
+  }
+
+  const toggleSymbolGroup = (symbol: string, groupName: string) => {
+    const symbols = groups[groupName] || []
+    const updated = {
+      ...groups,
+      [groupName]: symbols.includes(symbol)
+        ? symbols.filter(s => s !== symbol)
+        : [...symbols, symbol],
+    }
+    setGroups(updated)
+    saveGroups(updated)
+  }
+
+  const toggleStar = (symbol: string) => {
+    if (Object.keys(groups).length === 0) {
+      // Create a default "Favorites" group
+      const favs = { Favorites: [symbol] }
+      setGroups(favs)
+      saveGroups(favs)
+      return
+    }
+    setManagingSymbol(managingSymbol === symbol ? null : symbol)
+  }
+
+  const isStarred = (symbol: string) => {
+    return Object.values(groups).some(symbols => symbols.includes(symbol))
+  }
+
+  const filtered = watchlist.filter(t => {
+    const matchesSearch = t.symbol.toLowerCase().includes(search.toLowerCase())
+    if (activeGroup === 'all') return matchesSearch
+    const groupSymbols = groups[activeGroup] || []
+    return matchesSearch && groupSymbols.includes(t.symbol)
+  })
 
   const sorted = [...filtered].sort((a, b) => {
     const aVal = a[sortKey]
@@ -179,7 +250,73 @@ export default function MarketOverview() {
         </div>
       </div>
 
-      <div className="card p-0 overflow-hidden">
+      {/* Group tabs */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setActiveGroup('all')}
+          className={`px-3 py-1 rounded-md text-xs font-medium border-none cursor-pointer transition-colors ${
+            activeGroup === 'all' ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-elevated)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+          }`}
+        >All</button>
+        {Object.keys(groups).map(name => (
+          <div key={name} className="flex items-center gap-1">
+            <button
+              onClick={() => setActiveGroup(name)}
+              className={`px-3 py-1 rounded-md text-xs font-medium border-none cursor-pointer transition-colors ${
+                activeGroup === name ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-elevated)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+              }`}
+            >{name} ({(groups[name] || []).length})</button>
+            <button onClick={() => deleteGroup(name)}
+              className="p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-loss)] border-none bg-transparent cursor-pointer">
+              <X size={10} />
+            </button>
+          </div>
+        ))}
+        {showGroupInput ? (
+          <div className="flex items-center gap-1">
+            <input type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && createGroup()}
+              placeholder="Group name" className="input-field text-xs w-28 py-1" autoFocus />
+            <button onClick={createGroup} className="btn-ghost text-xs py-1">OK</button>
+            <button onClick={() => { setShowGroupInput(false); setNewGroupName('') }}
+              className="p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] border-none bg-transparent cursor-pointer">
+              <X size={12} />
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setShowGroupInput(true)}
+            className="px-2 py-1 rounded-md text-xs border border-dashed border-[var(--color-border-light)] text-[var(--color-text-muted)] bg-transparent cursor-pointer hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors flex items-center gap-1">
+            <Plus size={10} /> New Group
+          </button>
+        )}
+      </div>
+
+      <div className="card p-0 overflow-hidden relative">
+        {managingSymbol && (
+          <div className="absolute top-0 right-0 z-10 card-elevated p-3 m-2 min-w-[180px]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-[var(--color-text-primary)]">Add "{managingSymbol}" to:</span>
+              <button onClick={() => setManagingSymbol(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] border-none bg-transparent cursor-pointer p-0">
+                <X size={12} />
+              </button>
+            </div>
+            {Object.keys(groups).map(name => (
+              <button key={name}
+                onClick={() => { toggleSymbolGroup(managingSymbol, name); setManagingSymbol(null) }}
+                className={`w-full text-left px-2 py-1.5 text-xs rounded-md border-none cursor-pointer transition-colors ${
+                  (groups[name] || []).includes(managingSymbol)
+                    ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                    : 'bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]'
+                }`}
+              >
+                {(groups[name] || []).includes(managingSymbol) ? '✓ ' : ''}{name}
+              </button>
+            ))}
+            {Object.keys(groups).length === 0 && (
+              <p className="text-xs text-[var(--color-text-muted)]">Create a group first</p>
+            )}
+          </div>
+        )}
         <table>
           <thead>
             <tr>
@@ -196,7 +333,10 @@ export default function MarketOverview() {
             {sorted.map((t) => (
               <tr key={t.symbol} className="group cursor-pointer">
                 <td className="w-8">
-                  <Star size={14} className="text-[var(--color-text-muted)] hover:text-[var(--color-warn)] transition-colors cursor-pointer" />
+                  <Star size={14}
+                    onClick={() => toggleStar(t.symbol)}
+                    className={`${isStarred(t.symbol) ? 'text-[var(--color-warn)] fill-[var(--color-warn)]' : 'text-[var(--color-text-muted)]'} hover:text-[var(--color-warn)] transition-colors cursor-pointer`}
+                  />
                 </td>
                 <td>
                   <div className="flex items-center gap-2">
