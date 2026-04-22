@@ -3,6 +3,7 @@ import { ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import { mockAccount, mockPositions, mockOrders, dailyPnlData } from '../mock/data'
 import { fetchAccount, fetchPositions, fetchOrders } from '../api'
+import { getWSClient } from '../ws'
 import type { Position, Order } from '../types'
 
 type Tab = 'positions' | 'orders' | 'history'
@@ -16,8 +17,8 @@ export default function Trading() {
 
   useEffect(() => {
     fetchAccount().then((raw: any) => {
-      if (raw && raw.accountId) {
-        // Account exists, keep mock for display until full integration
+      if (raw && raw.totalValue > 0) {
+        setAccount({ ...mockAccount, ...raw, totalValue: Number(raw.totalValue), cash: Number(raw.cash) })
       }
     }).catch(() => {})
     fetchPositions().then(data => {
@@ -26,6 +27,20 @@ export default function Trading() {
     fetchOrders().then(data => {
       if (data && data.length > 0) setOrders(data)
     }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const ws = getWSClient()
+    const unsubFill = ws.on('fill', () => {
+      fetchPositions().then(data => { if (data && data.length > 0) setPositions(data) }).catch(() => {})
+      fetchOrders().then(data => { if (data && data.length > 0) setOrders(data) }).catch(() => {})
+      fetchAccount().then((raw: any) => {
+        if (raw && raw.totalValue > 0) {
+          setAccount({ ...mockAccount, ...raw, totalValue: Number(raw.totalValue), cash: Number(raw.cash) })
+        }
+      }).catch(() => {})
+    })
+    return unsubFill
   }, [])
 
   return (

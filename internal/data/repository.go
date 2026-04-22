@@ -17,6 +17,25 @@ func NewRepository(db *DB) *Repository {
 	return &Repository{db: db}
 }
 
+func (r *Repository) Ping(ctx context.Context) error {
+	return r.db.PingContext(ctx)
+}
+
+func (r *Repository) GetSetting(ctx context.Context, key string) (string, error) {
+	var val string
+	err := r.db.QueryRowContext(ctx, `SELECT value FROM app_settings WHERE key = ?`, key).Scan(&val)
+	if err != nil {
+		return "", err
+	}
+	return val, nil
+}
+
+func (r *Repository) SaveSetting(ctx context.Context, key, value string) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)`, key, value)
+	return err
+}
+
 func (r *Repository) SaveSignal(ctx context.Context, sig model.Signal) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT OR REPLACE INTO signals (signal_id, symbol, source, type, strength, price, timestamp)

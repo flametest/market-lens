@@ -16,7 +16,7 @@ func NewRouter(corsOrigins []string, mgr *data.Manager, repo *data.Repository, s
 	mux.HandleFunc("GET /api/v1/system/health", handleHealth)
 
 	if mgr != nil {
-		settings := NewSettingsHandler(mgr)
+		settings := NewSettingsHandler(mgr, repo)
 		settings.RegisterRoutes(mux)
 		market := NewMarketHandler(mgr)
 		market.RegisterRoutes(mux)

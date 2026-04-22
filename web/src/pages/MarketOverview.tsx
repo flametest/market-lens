@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Star, Search, ArrowUpDown, RefreshCw, Clock } from 'lucide-react'
 import { mockWatchlist } from '../mock/data'
 import { fetchSymbols, fetchQuote } from '../api'
+import { getWSClient } from '../ws'
 import type { Tick } from '../types'
 
 type SortKey = keyof Tick
@@ -57,6 +58,24 @@ export default function MarketOverview() {
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+
+  useEffect(() => {
+    const ws = getWSClient()
+    const unsub = ws.on('tick', (data: any) => {
+      setWatchlist(prev => prev.map(t =>
+        t.symbol === data.symbol
+          ? {
+              ...t,
+              price: Number(data.price) || t.price,
+              volume: Number(data.volume) || t.volume,
+              high: Number(data.high) || t.high,
+              low: Number(data.low) || t.low,
+            }
+          : t
+      ))
+    })
+    return unsub
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => loadData(search), 500)

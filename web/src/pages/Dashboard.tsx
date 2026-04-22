@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, Activity, Brain, Zap, Target } from 'lucide-react'
 import MetricCard from '../components/common/MetricCard'
 import { mockAccount, mockWatchlist, mockSignals, mockStrategies, mockSentiments } from '../mock/data'
-import { fetchSignals, fetchStrategies, fetchSentiments, fetchSymbols } from '../api'
+import { fetchSignals, fetchStrategies, fetchSentiments, fetchSymbols, fetchQuote } from '../api'
+import { getWSClient } from '../ws'
 import type { Tick, Signal, StrategyConfig, SentimentResult } from '../types'
 
 export default function Dashboard() {
@@ -16,6 +17,38 @@ export default function Dashboard() {
     fetchSignals().then(data => { if (data && data.length > 0) setSignals(data) }).catch(() => {})
     fetchStrategies().then(data => { if (data && data.length > 0) setStrategies(data) }).catch(() => {})
     fetchSentiments().then(data => { if (data && data.length > 0) setSentiments(data) }).catch(() => {})
+
+    fetchSymbols().then(raw => {
+      if (!raw || raw.length === 0) return
+      Promise.all(raw.map((s: any) => fetchQuote(s.code).catch(() => null)))
+        .then(ticks => {
+          const valid = ticks.filter((t): t is Tick => t !== null && t.price > 0)
+          if (valid.length > 0) setWatchlist(valid)
+        })
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const ws = getWSClient()
+    const unsub = ws.on('tick', (data: any) => {
+      setWatchlist(prev => prev.map(t =>
+        t.symbol === data.symbol
+          ? { ...t, price: Number(data.price) || t.price, volume: Number(data.volume) || t.volume, high: Number(data.high) || t.high, low: Number(data.low) || t.low }
+          : t
+      ))
+    })
+    const unsubSignal = ws.on('signal', (data: any) => {
+      setSignals(prev => [{
+        id: data.id || String(Date.now()),
+        symbol: data.symbol,
+        source: data.source || '',
+        type: data.type || 'NEUTRAL',
+        strength: Number(data.strength) || 0,
+        price: Number(data.price) || 0,
+        timestamp: data.timestamp ? data.timestamp / 1000000 : Date.now(),
+      }, ...prev].slice(0, 50))
+    })
+    return () => { unsub(); unsubSignal() }
   }, [])
 
   const topGainers = [...watchlist].sort((a, b) => b.changePercent - a.changePercent).slice(0, 3)

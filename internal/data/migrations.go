@@ -149,6 +149,10 @@ func (db *DB) Migrate(ctx context.Context) error {
 			reason          TEXT,
 			timestamp       INTEGER NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS app_settings (
+			key   TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		)`,
 	}
 
 	for _, m := range migrations {

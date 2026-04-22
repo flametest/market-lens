@@ -29,13 +29,13 @@ export default function Settings() {
   const [dataSources, setDataSources] = useState<DataSource[]>([])
   const [switching, setSwitching] = useState<string | null>(null)
 
-  const [systemMetrics] = useState([
-    { label: 'CPU Usage', value: '12.3%', color: 'profit' },
-    { label: 'Memory', value: '1.2 GB / 2 GB', color: 'profit' },
-    { label: 'Goroutines', value: '156', color: 'text-[var(--color-text-primary)]' },
-    { label: 'Event Bus', value: 'Connected', color: 'profit' },
-    { label: 'ClickHouse', value: 'Healthy', color: 'profit' },
-    { label: 'Redis', value: 'Connected', color: 'profit' },
+  const [systemMetrics, setSystemMetrics] = useState([
+    { label: 'Goroutines', value: '-', color: 'text-[var(--color-text-primary)]' },
+    { label: 'Memory', value: '-', color: 'text-[var(--color-text-primary)]' },
+    { label: 'Heap', value: '-', color: 'text-[var(--color-text-primary)]' },
+    { label: 'Uptime', value: '-', color: 'text-[var(--color-text-primary)]' },
+    { label: 'Database', value: '-', color: 'text-[var(--color-text-primary)]' },
+    { label: 'Provider', value: '-', color: 'text-[var(--color-text-primary)]' },
   ])
 
   const [riskRules, setRiskRules] = useState([
@@ -56,7 +56,27 @@ export default function Settings() {
 
   useEffect(() => {
     loadProvider()
+    loadSystemMetrics()
+    loadRiskConfig()
+    const id = setInterval(loadSystemMetrics, 10000)
+    return () => clearInterval(id)
   }, [])
+
+  const loadSystemMetrics = async () => {
+    try {
+      const data = await request<{ goroutines: number; memoryMB: number; heapMB: number; uptime: number; dbStatus: string; provider: string }>('/settings/system')
+      const upH = Math.floor(data.uptime / 3600)
+      const upM = Math.floor((data.uptime % 3600) / 60)
+      setSystemMetrics([
+        { label: 'Goroutines', value: String(data.goroutines), color: 'text-[var(--color-text-primary)]' },
+        { label: 'Memory', value: `${data.memoryMB} MB`, color: data.memoryMB < 500 ? 'text-profit' : 'text-loss' },
+        { label: 'Heap', value: `${data.heapMB} MB`, color: 'text-[var(--color-text-primary)]' },
+        { label: 'Uptime', value: `${upH}h ${upM}m`, color: 'text-[var(--color-text-primary)]' },
+        { label: 'Database', value: data.dbStatus === 'healthy' ? 'Healthy' : 'Unhealthy', color: data.dbStatus === 'healthy' ? 'text-profit' : 'text-loss' },
+        { label: 'Provider', value: data.provider || '-', color: 'text-[var(--color-accent)]' },
+      ])
+    } catch {}
+  }
 
   const loadProvider = async () => {
     try {
@@ -99,9 +119,11 @@ export default function Settings() {
   }
 
   const toggleRiskRule = (index: number) => {
-    setRiskRules(prev => prev.map((r, i) =>
+    const updated = riskRules.map((r, i) =>
       i === index ? { ...r, enabled: !r.enabled } : r
-    ))
+    )
+    setRiskRules(updated)
+    saveRiskConfig(updated)
   }
 
   const toggleNotification = (index: number) => {
