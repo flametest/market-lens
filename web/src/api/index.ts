@@ -219,6 +219,12 @@ export async function submitOrder(order: { symbol: string; side: string; type: s
   })
 }
 
+export async function cancelOrder(id: string): Promise<any> {
+  return request(`/trading/orders/${id}`, {
+    method: 'DELETE',
+  })
+}
+
 // AI
 export async function analyzeSentiment(text: string): Promise<SentimentResult> {
   const raw = await request('/ai/analyze', {

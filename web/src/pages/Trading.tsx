@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import { mockAccount, mockPositions, mockOrders, dailyPnlData } from '../mock/data'
-import { fetchAccount, fetchPositions, fetchOrders, submitOrder } from '../api'
+import { fetchAccount, fetchPositions, fetchOrders, submitOrder, cancelOrder as cancelOrderApi } from '../api'
 import { getWSClient } from '../ws'
 import type { Position, Order } from '../types'
 
@@ -45,6 +45,13 @@ export default function Trading() {
       setOrderError(err?.message || 'Order failed')
     }
     setSubmitting(false)
+  }
+
+  const handleCancelOrder = async (id: string) => {
+    try {
+      await cancelOrderApi(id)
+      refreshAll()
+    } catch {}
   }
 
   const refreshAll = async () => {
@@ -284,11 +291,11 @@ export default function Trading() {
                 <th>Price</th>
                 <th>Filled</th>
                 <th>Status</th>
-                <th>Strategy</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map(o => (
+              {orders.filter(o => o.status === 'NEW').map(o => (
                 <tr key={o.id}>
                   <td className="text-xs">{new Date(o.createdAt).toLocaleString()}</td>
                   <td className="font-data text-sm font-medium text-[var(--color-text-primary)]">{o.symbol}</td>
@@ -300,13 +307,60 @@ export default function Trading() {
                   <td className="font-data text-sm">${o.price.toFixed(2)}</td>
                   <td className="font-data text-sm">{o.filledQty}/{o.quantity}</td>
                   <td>
-                    <span className={`badge ${o.status === 'FILLED' ? 'badge-buy' : o.status === 'NEW' ? 'badge-running' : 'badge-neutral'}`}>
+                    <span className="badge badge-running">{o.status}</span>
+                  </td>
+                  <td>
+                    <button onClick={() => handleCancelOrder(o.id)} className="px-2 py-0.5 rounded text-xs font-medium border-none cursor-pointer bg-[var(--color-loss)]/15 text-loss hover:bg-[var(--color-loss)]/30 transition-colors">
+                      Cancel
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {orders.filter(o => o.status === 'NEW').length === 0 && (
+                <tr><td colSpan={9} className="text-xs text-[var(--color-text-muted)] text-center py-4">No pending orders</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+
+        {activeTab === 'history' && (
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Symbol</th>
+                <th>Side</th>
+                <th>Type</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Filled</th>
+                <th>Status</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.filter(o => o.status !== 'NEW').map(o => (
+                <tr key={o.id}>
+                  <td className="text-xs">{new Date(o.createdAt).toLocaleString()}</td>
+                  <td className="font-data text-sm font-medium text-[var(--color-text-primary)]">{o.symbol}</td>
+                  <td>
+                    <span className={`badge ${o.side === 'BUY' ? 'badge-buy' : 'badge-sell'}`}>{o.side}</span>
+                  </td>
+                  <td className="text-xs">{o.type}</td>
+                  <td className="font-data text-sm">{o.quantity}</td>
+                  <td className="font-data text-sm">${o.price.toFixed(2)}</td>
+                  <td className="font-data text-sm">{o.filledQty}/{o.quantity}</td>
+                  <td>
+                    <span className={`badge ${o.status === 'FILLED' ? 'badge-buy' : o.status === 'CANCELLED' ? 'badge-neutral' : 'badge-stopped'}`}>
                       {o.status}
                     </span>
                   </td>
-                  <td className="text-xs">{o.strategy}</td>
+                  <td className="text-xs">{o.strategy || '-'}</td>
                 </tr>
               ))}
+              {orders.filter(o => o.status !== 'NEW').length === 0 && (
+                <tr><td colSpan={9} className="text-xs text-[var(--color-text-muted)] text-center py-4">No history yet</td></tr>
+              )}
             </tbody>
           </table>
         )}
