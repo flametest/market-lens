@@ -208,6 +208,7 @@ export async function fetchOrders(): Promise<Order[]> {
     price: Number(o.price),
     avgFillPrice: Number(o.avgFillPrice),
     fee: Number(o.fee),
+    createdAt: o.createdAt ? new Date(Number(o.createdAt) * 1000).toISOString() : '',
   }))
 }
 

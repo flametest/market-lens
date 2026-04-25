@@ -38,7 +38,7 @@ func NewRouter(corsOrigins []string, mgr *data.Manager, repo *data.Repository, s
 	}
 
 	if execEngine != nil {
-		trading := NewTradingHandler(execEngine, mgr)
+		trading := NewTradingHandler(execEngine, mgr, repo)
 		trading.RegisterRoutes(mux)
 	}
 

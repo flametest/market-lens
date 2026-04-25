@@ -39,34 +39,33 @@ export default function Trading() {
         return
       }
       await submitOrder({ symbol: orderSymbol, side: orderSide, type: orderType, quantity: qty, price })
-      // Refresh data
-      const [raw, posData, ordData] = await Promise.all([
-        fetchAccount().catch(() => null),
-        fetchPositions().catch(() => []),
-        fetchOrders().catch(() => []),
-      ])
-      if (raw && raw.totalValue > 0) setAccount({ ...mockAccount, ...raw, totalValue: Number(raw.totalValue), cash: Number(raw.cash) })
-      if (posData && posData.length > 0) setPositions(posData)
-      if (ordData && ordData.length > 0) setOrders(ordData)
+      // Refresh all data
+      refreshAll()
     } catch (err: any) {
       setOrderError(err?.message || 'Order failed')
     }
     setSubmitting(false)
   }
 
-  useEffect(() => {
-    fetchAccount().then((raw: any) => {
-      if (raw && raw.totalValue > 0) {
-        setAccount({ ...mockAccount, ...raw, totalValue: Number(raw.totalValue), cash: Number(raw.cash) })
-      }
-    }).catch(() => {})
-    fetchPositions().then(data => {
-      if (data && data.length > 0) setPositions(data)
-    }).catch(() => {})
-    fetchOrders().then(data => {
-      if (data && data.length > 0) setOrders(data)
-    }).catch(() => {})
-  }, [])
+  const refreshAll = async () => {
+    const [raw, posData, ordData] = await Promise.all([
+      fetchAccount().catch(() => null as any),
+      fetchPositions().catch(() => [] as Position[]),
+      fetchOrders().catch(() => [] as Order[]),
+    ])
+    if (raw) {
+      const cash = Number(raw.cash) || 0
+      const totalValue = Number(raw.totalValue) || 0
+      setAccount({ ...mockAccount, ...raw, totalValue, cash, unrealizedPnl: totalValue - 1000000 })
+    }
+    setPositions(posData && posData.length > 0 ? posData : [])
+    setOrders(ordData && ordData.length > 0 ? ordData : [])
+  }
+
+  useEffect(() => { refreshAll() }, [])
+
+  // Refresh when switching tabs
+  useEffect(() => { refreshAll() }, [activeTab])
 
   useEffect(() => {
     const ws = getWSClient()

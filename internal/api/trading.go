@@ -8,6 +8,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/flametest/market-lens/internal/data"
 	"github.com/flametest/market-lens/internal/execution"
 	"github.com/flametest/market-lens/pkg/model"
 )
@@ -15,14 +16,15 @@ import (
 type TradingHandler struct {
 	engine *execution.Engine
 	mgr    quoteFetcher
+	repo   *data.Repository
 }
 
 type quoteFetcher interface {
 	GetQuote(ctx context.Context, symbol string) (*model.Tick, error)
 }
 
-func NewTradingHandler(engine *execution.Engine, mgr quoteFetcher) *TradingHandler {
-	return &TradingHandler{engine: engine, mgr: mgr}
+func NewTradingHandler(engine *execution.Engine, mgr quoteFetcher, repo *data.Repository) *TradingHandler {
+	return &TradingHandler{engine: engine, mgr: mgr, repo: repo}
 }
 
 func (h *TradingHandler) RegisterRoutes(mux *http.ServeMux) {
@@ -34,11 +36,37 @@ func (h *TradingHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *TradingHandler) getAccount(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]string{"accountId": h.engine.GetAccountID()})
+	account, err := h.repo.GetAccount(r.Context(), h.engine.GetAccountID())
+	if err != nil || account == nil {
+		WriteJSON(w, http.StatusOK, map[string]any{
+			"accountId":     h.engine.GetAccountID(),
+			"cash":          "0",
+			"totalValue":    "0",
+			"unrealizedPnl": "0",
+			"realizedPnl":   "0",
+			"dailyPnl":      0,
+		})
+		return
+	}
+	WriteJSON(w, http.StatusOK, account)
 }
 
 func (h *TradingHandler) listPositions(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, []model.Position{})
+	positions, err := h.repo.ListPositions(r.Context(), h.engine.GetAccountID())
+	if err != nil {
+		WriteJSON(w, http.StatusOK, []model.Position{})
+		return
+	}
+	var active []model.Position
+	for _, p := range positions {
+		if !p.Quantity.IsZero() {
+			active = append(active, p)
+		}
+	}
+	if active == nil {
+		active = []model.Position{}
+	}
+	WriteJSON(w, http.StatusOK, active)
 }
 
 func (h *TradingHandler) listOrders(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +74,15 @@ func (h *TradingHandler) listOrders(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 {
 		limit = 50
 	}
-	WriteJSON(w, http.StatusOK, []model.Order{})
+	orders, err := h.repo.GetOrders(r.Context(), h.engine.GetAccountID(), limit)
+	if err != nil {
+		WriteJSON(w, http.StatusOK, []model.Order{})
+		return
+	}
+	if orders == nil {
+		orders = []model.Order{}
+	}
+	WriteJSON(w, http.StatusOK, orders)
 }
 
 func (h *TradingHandler) placeOrder(w http.ResponseWriter, r *http.Request) {
