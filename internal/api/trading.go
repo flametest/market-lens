@@ -30,6 +30,7 @@ func (h *TradingHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/trading/positions", h.listPositions)
 	mux.HandleFunc("GET /api/v1/trading/orders", h.listOrders)
 	mux.HandleFunc("POST /api/v1/trading/orders", h.placeOrder)
+	mux.HandleFunc("DELETE /api/v1/trading/orders/{id}", h.cancelOrder)
 }
 
 func (h *TradingHandler) getAccount(w http.ResponseWriter, r *http.Request) {
@@ -107,4 +108,17 @@ func (h *TradingHandler) placeOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusCreated, order)
+}
+
+func (h *TradingHandler) cancelOrder(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		WriteError(w, http.StatusBadRequest, 400, "order id is required")
+		return
+	}
+	if err := h.engine.CancelOrder(r.Context(), id); err != nil {
+		WriteError(w, http.StatusInternalServerError, 500, err.Error())
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
